@@ -104,7 +104,7 @@ if st.button("🚀 ابدأ التنبؤ"):
         scalers = {}
         scaled_data = pd.DataFrame(index=data.index)
         for col in features:
-            if col not in data.columns or data[col].isnull().any() or data[col].dropna().shape[0] == 0:
+            if (col not in data.columns) or (data[col].isnull().values.any()) or (data[col].dropna().shape[0] == 0):
                 st.warning(f"⚠️ العمود '{col}' يحتوي على بيانات غير كافية أو غير موجود وتم تجاهله.")
                 continue
             scaler = MinMaxScaler()
