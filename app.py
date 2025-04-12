@@ -69,7 +69,10 @@ if st.button("🚀 ابدأ التنبؤ"):
             st.error("❌ لم يتم العثور على بيانات لهذا الرمز.")
             st.stop()
 
-        df['RSI'] = ta.momentum.RSIIndicator(close=df['Close']).rsi()
+        df.dropna(subset=['Close'], inplace=True)  # تنظيف أي صف فيه NaN في Close
+df['Close'] = df['Close'].astype(float)    # تأكد أن النوع رقمي 100%
+df['RSI'] = ta.momentum.RSIIndicator(close=df['Close']).rsi()
+
         df['EMA20'] = ta.trend.EMAIndicator(close=df['Close'], window=20).ema_indicator()
         df['EMA50'] = ta.trend.EMAIndicator(close=df['Close'], window=50).ema_indicator()
         macd = ta.trend.MACD(close=df['Close'])
