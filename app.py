@@ -69,7 +69,15 @@ if st.button("🚀 ابدأ التنبؤ"):
         df['MACD'] = macd.macd()
 
         try:
-            stoch = ta.momentum.StochasticOscillator(high=df['High'], low=df['Low'], close=clean_close)
+            high = np.squeeze(df['High'].values)
+            low = np.squeeze(df['Low'].values)
+            close = np.squeeze(clean_close.values)
+
+            stoch = ta.momentum.StochasticOscillator(
+                high=pd.Series(high, index=df.index),
+                low=pd.Series(low, index=df.index),
+                close=pd.Series(close, index=df.index)
+            )
             stoch_k = stoch.stoch().fillna(0)
             stoch_d = stoch.stoch_signal().fillna(0)
             df['Stoch_K'] = stoch_k.values
