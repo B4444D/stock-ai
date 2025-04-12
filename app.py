@@ -37,6 +37,27 @@ if st.button("🚀 ابدأ التنبؤ"):
             st.error("❌ لم يتم تحميل البيانات بنجاح.")
             st.stop()
 
+        # جلب السعر اللحظي
+        live_price = None
+        if market == "🇺🇸 السوق الأمريكي":
+            url = f"https://finnhub.io/api/v1/quote?symbol={symbol}&token={api_key}"
+            r = requests.get(url).json()
+            live_price = float(r["c"]) if "c" in r and r["c"] else None
+        elif market == "₿ العملات الرقمية":
+            url = f"https://finnhub.io/api/v1/quote?symbol=BINANCE:{symbol}USDT&token={api_key}"
+            r = requests.get(url).json()
+            live_price = float(r["c"]) if "c" in r and r["c"] else None
+        elif market == "🏦 السوق السعودي":
+            try:
+                live_price = float(df['Close'].dropna().iloc[-1])
+            except:
+                live_price = None
+
+        if live_price:
+            st.info(f"💰 السعر اللحظي لـ {symbol}: {live_price:.2f}")
+        else:
+            st.warning("❌ تعذر جلب السعر اللحظي.")
+
         # تنظيف البيانات
         df = df[['Close']].dropna()
         close_clean = pd.Series(df['Close'].values.flatten(), index=df.index).astype(float)
