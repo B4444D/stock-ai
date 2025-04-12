@@ -73,15 +73,7 @@ if st.button("🚀 ابدأ التنبؤ"):
         df['MACD'] = 0
         df['Stoch_K'] = 0
         df['Stoch_D'] = 0
-        except Exception as e:
-            st.warning(f"⚠️ تعذر حساب المؤشرات الفنية: {e}")
-            df['RSI'] = 0
-            df['EMA20'] = 0
-            df['EMA50'] = 0
-            df['MACD'] = 0
-            df['Stoch_K'] = 0
-            df['Stoch_D'] = 0
-        except Exception as e:
+                except Exception as e:
             st.warning(f"⚠️ تعذر حساب مؤشر Stochastic: {e}")
             df['Stoch_K'] = 0
             df['Stoch_D'] = 0
