@@ -1,8 +1,150 @@
-/mnt/data/app-enhanced.py
+import streamlit as st
+import yfinance as yf
+import pandas as pd
+import numpy as np
+import ta
+import matplotlib.pyplot as plt
+import requests
+from bs4 import BeautifulSoup
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Dropout
+import os
+from datetime import date
+import glob
 
-        # مقارنة التوقعات السابقة (المرحلة 2)
+st.set_page_config(page_title="نموذج التنبؤ الذكي", layout="centered")
+st.title("📊 هذا تطبيق تجريبي للتنبؤ — لا يمثل نصيحة مالية")
+
+market = st.selectbox("🗂️ اختر السوق:", ["🇺🇸 السوق الأمريكي", "🏦 السوق السعودي", "₿ العملات الرقمية"])
+user_input = st.text_input("🔍 أدخل رمز السهم أو العملة:", "AAPL")
+
+if market == "🏦 السوق السعودي":
+    ticker = user_input.upper() + ".SR"
+    saudisymbol = user_input
+elif market == "₿ العملات الرقمية":
+    ticker = user_input.upper() + "-USD"
+else:
+    ticker = user_input.upper()
+
+predict_days = st.selectbox("📆 عدد الأيام المستقبلية للتوقع:", [3, 5, 7])
+
+def get_crypto_price(symbol):
+    crypto_map = {
+        "BTC": "bitcoin",
+        "ETH": "ethereum",
+        "XRP": "ripple",
+        "DOGE": "dogecoin",
+        "ADA": "cardano",
+        "BNB": "binancecoin",
+        "SHIB": "shiba-inu",
+        "SOL": "solana",
+        "TRX": "tron",
+        "AVAX": "avalanche-2"
+    }
+    coin_id = crypto_map.get(symbol.upper(), None)
+    if not coin_id:
+        return None, None
+    url = f"https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids={coin_id}"
+    response = requests.get(url)
+    try:
+        data = response.json()[0]
+        price = data['current_price']
+        change_24h = data['price_change_percentage_24h']
+        return float(price), float(change_24h)
+    except:
+        return None, None
+
+if st.button("🚀 ابدأ التنبؤ"):
+    with st.spinner("جاري تحميل البيانات وتدريب النموذج..."):
+
+        if market == "₿ العملات الرقمية":
+            live_price, _ = get_crypto_price(user_input)
+        else:
+            live_price = None
+
+        df = yf.download(ticker, start="2018-01-01")
+        if df.empty:
+            st.error("❌ لم يتم العثور على بيانات لهذا الرمز.")
+            st.stop()
+
+        df['RSI'] = ta.momentum.RSIIndicator(close=df['Close']).rsi()
+        df['EMA20'] = ta.trend.EMAIndicator(close=df['Close'], window=20).ema_indicator()
+        df['EMA50'] = ta.trend.EMAIndicator(close=df['Close'], window=50).ema_indicator()
+        macd = ta.trend.MACD(close=df['Close'])
+        df['MACD'] = macd.macd()
+        stoch = ta.momentum.StochasticOscillator(high=df['High'], low=df['Low'], close=df['Close'])
+        df['Stoch_K'] = stoch.stoch()
+        df['Stoch_D'] = stoch.stoch_signal()
+        df.dropna(inplace=True)
+
+        features = ['Open', 'High', 'Low', 'Close', 'Volume', 'RSI', 'EMA20', 'EMA50', 'MACD', 'Stoch_K', 'Stoch_D']
+        data = df[features]
+        scalers = {}
+        scaled_data = pd.DataFrame(index=data.index)
+        for col in features:
+            scaler = MinMaxScaler()
+            scaled_data[col] = scaler.fit_transform(data[[col]])
+            scalers[col] = scaler
+
+        sequence_length = 60
+        X, y = [], []
+        for i in range(sequence_length, len(scaled_data)-predict_days):
+            X.append(scaled_data.iloc[i-sequence_length:i].values)
+            y.append(scaled_data.iloc[i:i+predict_days]['Close'].values)
+
+        X, y = np.array(X), np.array(y)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+
+        model = Sequential()
+        model.add(LSTM(100, return_sequences=True, input_shape=(X.shape[1], X.shape[2])))
+        model.add(Dropout(0.2))
+        model.add(LSTM(100))
+        model.add(Dropout(0.2))
+        model.add(Dense(predict_days))
+        model.compile(optimizer='adam', loss='mean_squared_error')
+        model.fit(X_train, y_train, epochs=30, batch_size=64, verbose=0)
+
+        last_sequence = scaled_data[-sequence_length:].values
+        forecast_scaled = []
+        current_sequence = last_sequence.copy()
+
+        for _ in range(predict_days):
+            prediction = model.predict(current_sequence.reshape(1, sequence_length, len(features)), verbose=0)
+            forecast_scaled.append(prediction[0][0])
+            next_step = current_sequence[1:]
+            next_close = prediction[0][0]
+            next_row = current_sequence[-1].copy()
+            next_row[features.index('Close')] = next_close
+            current_sequence = np.vstack([next_step, next_row])
+
+        forecast = scalers['Close'].inverse_transform(np.array(forecast_scaled).reshape(-1, 1)).flatten()
+        last_real = float(df['Close'].iloc[-1])
+
+        st.subheader("📈 التوقعات القادمة:")
+        forecast_dates = pd.date_range(start=df.index[-1], periods=predict_days+1, freq='B')[1:]
+        for i, price in enumerate(forecast):
+            color = 'green' if price > last_real else 'red'
+            symbol = "↑" if price > last_real else "↓"
+            st.markdown(f"<div style='background-color:{color};padding:10px;border-radius:8px;color:white;'>اليوم {i+1}: {price:.2f} {symbol}</div>", unsafe_allow_html=True)
+
+        os.makedirs("forecasts", exist_ok=True)
+        result_df = pd.DataFrame({'date': forecast_dates, 'predicted_close': forecast})
+        save_path = f"forecasts/forecast_{ticker.replace('.', '_')}_{date.today()}.csv"
+        result_df.to_csv(save_path, index=False)
+        st.success(f"✅ تم حفظ التوقعات في ملف: {save_path}")
+
+        st.subheader("📉 مقارنة السعر الحقيقي والتوقع")
+        fig, ax = plt.subplots(figsize=(12, 5))
+        ax.plot(df['Close'][-100:], label='السعر الحقيقي')
+        ax.plot(forecast_dates, forecast, label='التوقع', linestyle='--', marker='o')
+        ax.legend()
+        ax.grid()
+        st.pyplot(fig)
+
+        # مراجعة التوقعات السابقة
         st.subheader("📋 مراجعة التوقعات السابقة")
-        import glob
         review_files = glob.glob("forecasts/forecast_*.csv")
         review_results = []
 
@@ -12,7 +154,6 @@
                 forecast_dates = pd.to_datetime(df_forecast['date'])
                 predicted = df_forecast['predicted_close']
 
-                # جلب الأسعار الحقيقية من yfinance
                 real_data = yf.download(ticker, start=str(forecast_dates.min().date()), end=str(forecast_dates.max().date()))
                 if real_data.empty:
                     continue
