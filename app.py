@@ -13,9 +13,6 @@ import os
 from datetime import date
 import glob
 
-# ♥️ تثبيت القيم العشوائية لجعل التوقعات ثابتة
-np.random.seed(42)
-
 st.set_page_config(page_title="نموذج التنبؤ الذكي", layout="centered")
 st.title("📊 هذا تطبيق تجريبي للتنبؤ — لا يمثل نصيحة مالية")
 
@@ -29,7 +26,7 @@ elif market == "₿ العملات الرقمية":
 else:
     ticker = user_input.upper()
 
-predict_days = st.selectbox("🗖️ عدد الأيام المستقبلية للتوقع:", [3, 5, 7])
+predict_days = st.selectbox("📆 عدد الأيام المستقبلية للتوقع:", [3, 5, 7])
 
 def get_crypto_price(symbol):
     url = f"https://api.coingecko.com/api/v3/simple/price?ids={symbol}&vs_currencies=usd&include_24hr_change=true"
@@ -37,7 +34,7 @@ def get_crypto_price(symbol):
     try:
         data = response.json()
         price = data[symbol]['usd']
-        change = data[symbol]['usd_24h_change']
+        change = data[symbol]['usd_24hr_change']
         return float(price), float(change)
     except:
         return None, None
@@ -50,7 +47,7 @@ if st.button("🚀 ابدأ التنبؤ"):
         else:
             live_price = None
 
-        df = yf.download(ticker, start="2021-01-01")
+        df = yf.download(ticker, start="2018-01-01")
 
         if df.empty or 'Close' not in df.columns:
             st.error("❌ لم يتم العثور على بيانات سعر الإغلاق (Close) لهذا الرمز.")
@@ -61,7 +58,9 @@ if st.button("🚀 ابدأ التنبؤ"):
         df['Close'] = df['Close'].astype(float)
 
         clean_close = df['Close'].copy()
-        clean_close = pd.Series(clean_close.values.flatten(), index=df.index).astype(float)
+        if isinstance(clean_close, pd.DataFrame):
+            clean_close = clean_close.iloc[:, 0]
+        clean_close = pd.Series(clean_close.values, index=df.index).astype(float)
 
         df['RSI'] = ta.momentum.RSIIndicator(close=clean_close).rsi()
         df['EMA20'] = ta.trend.EMAIndicator(close=clean_close, window=20).ema_indicator()
@@ -70,17 +69,23 @@ if st.button("🚀 ابدأ التنبؤ"):
         df['MACD'] = macd.macd()
 
         try:
+            high = np.squeeze(df['High'].values)
+            low = np.squeeze(df['Low'].values)
+            close = np.squeeze(clean_close.values)
+
             stoch = ta.momentum.StochasticOscillator(
-        high=pd.Series(df['High'].values.flatten(), index=df.index),  # تحويل إلى 1D
-        low=pd.Series(df['Low'].values.flatten(), index=df.index),    # تحويل إلى 1D
-        close=pd.Series(clean_close.values.flatten(), index=df.index) # تحويل إلى 1D
-    )
-    df['Stoch_K'] = stoch.stoch().fillna(0)
-    df['Stoch_D'] = stoch.stoch_signal().fillna(0)
-except Exception as e:
-    st.warning(f"⚠️ تعذر حساب مؤشر Stochastic: {e}")
-    df['Stoch_K'] = 50  # قيمة متوسطة افتراضية
-    df['Stoch_D'] = 50  # قيمة متوسطة افتراضية
+                high=pd.Series(high, index=df.index),
+                low=pd.Series(low, index=df.index),
+                close=pd.Series(close, index=df.index)
+            )
+            stoch_k = stoch.stoch().fillna(0)
+            stoch_d = stoch.stoch_signal().fillna(0)
+            df['Stoch_K'] = stoch_k.values
+            df['Stoch_D'] = stoch_d.values
+        except Exception as e:
+            st.warning(f"⚠️ تعذر حساب مؤشر Stochastic: {e}")
+            df['Stoch_K'] = 0
+            df['Stoch_D'] = 0
 
         df.dropna(inplace=True)
 
@@ -89,26 +94,15 @@ except Exception as e:
         scalers = {}
         scaled_data = pd.DataFrame(index=data.index)
         for col in features:
-            if col not in data.columns or data[col].dropna().shape[0] == 0:
-                st.warning(f"⚠️ تم تجاهل العمود '{col}' لأنه لا يحتوي على بيانات قابلة للاستخدام.")
-                continue
             scaler = MinMaxScaler()
             scaled_data[col] = scaler.fit_transform(data[[col]])
             scalers[col] = scaler
-
-        if scaled_data.shape[1] == 0:
-            st.error("❌ لا توجد بيانات كافية للتدريب. حاول تغيير الرمز أو توسيع الفترة الزمنية.")
-            st.stop()
 
         sequence_length = 60
         X, y = [], []
         for i in range(sequence_length, len(scaled_data)-predict_days):
             X.append(scaled_data.iloc[i-sequence_length:i].values)
             y.append(scaled_data.iloc[i:i+predict_days]['Close'].values)
-
-        if len(X) == 0:
-            st.error("⚠️ البيانات غير كافية لتدريب النموذج. يرجى تجربة رمز آخر أو فترة زمنية أطول.")
-            st.stop()
 
         X, y = np.array(X), np.array(y)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
@@ -127,12 +121,12 @@ except Exception as e:
         current_sequence = last_sequence.copy()
 
         for _ in range(predict_days):
-            prediction = model.predict(current_sequence.reshape(1, sequence_length, scaled_data.shape[1]), verbose=0)
+            prediction = model.predict(current_sequence.reshape(1, sequence_length, len(features)), verbose=0)
             forecast_scaled.append(prediction[0][0])
             next_step = current_sequence[1:]
+            next_close = prediction[0][0]
             next_row = current_sequence[-1].copy()
-            close_idx = scaled_data.columns.get_loc('Close')
-            next_row[close_idx] = prediction[0][0]
+            next_row[features.index('Close')] = next_close
             current_sequence = np.vstack([next_step, next_row])
 
         forecast = scalers['Close'].inverse_transform(np.array(forecast_scaled).reshape(-1, 1)).flatten()
@@ -163,3 +157,38 @@ except Exception as e:
         ax.legend()
         ax.grid()
         st.pyplot(fig)
+
+        st.subheader("📋 مراجعة التوقعات السابقة")
+        review_files = glob.glob("forecasts/forecast_*.csv")
+        review_results = []
+
+        for file in review_files:
+            try:
+                df_forecast = pd.read_csv(file)
+                forecast_dates = pd.to_datetime(df_forecast['date'])
+                predicted = df_forecast['predicted_close']
+
+                real_data = yf.download(ticker, start=str(forecast_dates.min().date()), end=str(forecast_dates.max().date()))
+                if real_data.empty:
+                    continue
+                real_prices = real_data['Close']
+
+                for i, f_date in enumerate(forecast_dates):
+                    real_price = real_prices.get(f_date.strftime("%Y-%m-%d"), None)
+                    if real_price:
+                        predicted_price = predicted[i]
+                        error = abs(real_price - predicted_price)
+                        accuracy = 100 - (error / real_price * 100)
+                        review_results.append({
+                            'التاريخ': f_date.date(),
+                            'السعر المتوقع': round(predicted_price, 2),
+                            'السعر الحقيقي': round(real_price, 2),
+                            'الدقة (%)': round(accuracy, 2)
+                        })
+            except:
+                continue
+
+        if review_results:
+            st.dataframe(pd.DataFrame(review_results).sort_values("التاريخ", ascending=False))
+        else:
+            st.info("📭 لا توجد توقعات سابقة لمراجعتها حتى الآن.")
