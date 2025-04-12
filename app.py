@@ -55,9 +55,9 @@ if st.button("🚀 ابدأ التنبؤ"):
         else:
             live_price = None
 
-        # تحميل بيانات آخر شهر فقط
+        # تحميل بيانات آخر شهرين فقط
         end_date = datetime.today()
-        start_date = end_date - timedelta(days=30)
+        start_date = end_date - timedelta(days=60)
         df = yf.download(ticker, start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
 
         if df.empty or 'Close' not in df.columns:
@@ -105,6 +105,9 @@ if st.button("🚀 ابدأ التنبؤ"):
         scalers = {}
         scaled_data = pd.DataFrame(index=data.index)
         for col in features:
+            if data[col].isnull().any() or data[col].dropna().shape[0] == 0:
+                st.warning(f"⚠️ العمود '{col}' يحتوي على بيانات غير كافية أو قيم مفقودة وتم تجاهله.")
+                continue
             scaler = MinMaxScaler()
             scaled_data[col] = scaler.fit_transform(data[[col]])
             scalers[col] = scaler
@@ -122,7 +125,6 @@ if st.button("🚀 ابدأ التنبؤ"):
         X, y = np.array(X), np.array(y)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
-        # تحميل أو تدريب النموذج
         if os.path.exists("trained_model.h5"):
             model = load_model("trained_model.h5")
             st.info("✅ تم تحميل النموذج المدرب مسبقًا.")
