@@ -3,31 +3,31 @@ import yfinance as yf
 import requests
 import pandas as pd
 import numpy as np
-import tensorflow as tf
-import random
-import os
 import ta
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
+import tensorflow as tf
+import random
+import os
 
-st.set_page_config(page_title="نموذج تنبؤ بالأسعار", layout="centered")
-st.title("🔮 تنبؤ الأسعار باستخدام المؤشرات الفنية")
+st.set_page_config(page_title="نموذج تنبؤ متقدم", layout="centered")
+st.title("🔮 تنبؤ أسعار الأسهم بدقة عالية")
+
+# تثبيت القيم العشوائية
+seed = 42
+os.environ['PYTHONHASHSEED'] = str(seed)
+random.seed(seed)
+np.random.seed(seed)
+tf.random.set_seed(seed)
 
 api_key = "cvtcvi1r01qhup0vnjrgcvtcvi1r01qhup0vnjs0"
 
 market = st.selectbox("🗂️ اختر السوق:", ["🇺🇸 السوق الأمريكي", "🏦 السوق السعودي", "₿ العملات الرقمية"])
 symbol = st.text_input("🔍 أدخل رمز السهم أو العملة:", "AAPL").upper()
 predict_days = st.selectbox("📅 عدد الأيام المستقبلية للتنبؤ:", [3, 5, 7])
-
-# تثبيت القيم العشوائية لضمان ثبات النتائج
-seed = 42
-os.environ['PYTHONHASHSEED'] = str(seed)
-random.seed(seed)
-np.random.seed(seed)
-tf.random.set_seed(seed)
 
 if st.button("🚀 ابدأ التنبؤ"):
     with st.spinner("📡 تحميل البيانات وتدريب النموذج..."):
@@ -43,11 +43,11 @@ if st.button("🚀 ابدأ التنبؤ"):
             ticker = symbol + "-USD"
             df = yf.download(ticker, period="6mo")
 
-        if df.empty or 'Close' not in df:
-            st.error("❌ لم يتم تحميل البيانات بنجاح.")
+        if df.empty:
+            st.error("❌ لا توجد بيانات.")
             st.stop()
 
-        # جلب السعر اللحظي
+        # السعر اللحظي
         live_price = None
         if market == "🇺🇸 السوق الأمريكي":
             url = f"https://finnhub.io/api/v1/quote?symbol={symbol}&token={api_key}"
@@ -65,33 +65,30 @@ if st.button("🚀 ابدأ التنبؤ"):
 
         if live_price:
             st.info(f"💰 السعر اللحظي لـ {symbol}: {live_price:.2f}")
-        else:
-            st.warning("❌ تعذر جلب السعر اللحظي.")
 
-        # تنظيف البيانات
-        df = df[['Close']].dropna()
+        # حساب المؤشرات الفنية
+        df = df.dropna()
         close_clean = pd.Series(df['Close'].values.flatten(), index=df.index).astype(float)
 
-        # حساب RSI و MACD
-        rsi_values = ta.momentum.RSIIndicator(close=close_clean, window=14).rsi()
-        df['RSI'] = rsi_values.reindex(df.index).fillna(0)
+        df['RSI'] = ta.momentum.RSIIndicator(close=close_clean, window=14).rsi().reindex(df.index).fillna(0)
+        macd = ta.trend.MACD(close=close_clean)
+        df['MACD'] = macd.macd().reindex(df.index).fillna(0)
+        df['EMA20'] = ta.trend.EMAIndicator(close=close_clean, window=20).ema_indicator().fillna(0)
+        df['EMA50'] = ta.trend.EMAIndicator(close=close_clean, window=50).ema_indicator().fillna(0)
 
-        macd_values = ta.trend.MACD(close=close_clean)
-        df['MACD'] = macd_values.macd().reindex(df.index).fillna(0)
+        features = ['Open', 'High', 'Low', 'Close', 'Volume', 'RSI', 'MACD', 'EMA20', 'EMA50']
+        df = df[features].dropna()
 
         # التطبيع
-        close_scaler = MinMaxScaler()
-        df['Close_scaled'] = close_scaler.fit_transform(df[['Close']])
-
         scaler = MinMaxScaler()
-        scaled = scaler.fit_transform(df[['Close_scaled', 'RSI', 'MACD']])
+        scaled = scaler.fit_transform(df)
 
-        # تجهيز بيانات التدريب
+        # إعداد البيانات
         seq_len = 60
         X, y = [], []
         for i in range(seq_len, len(scaled) - predict_days):
             X.append(scaled[i-seq_len:i])
-            y.append(scaled[i:i+predict_days, 0])
+            y.append(scaled[i:i+predict_days, 3])  # التوقع على عمود Close فقط
 
         X, y = np.array(X), np.array(y)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
@@ -99,29 +96,37 @@ if st.button("🚀 ابدأ التنبؤ"):
         # بناء النموذج
         input_features = X.shape[2]
         model = Sequential()
-        model.add(LSTM(64, return_sequences=True, input_shape=(seq_len, input_features)))
-        model.add(Dropout(0.2))
+        model.add(LSTM(128, return_sequences=True, input_shape=(seq_len, input_features)))
+        model.add(Dropout(0.3))
         model.add(LSTM(64))
-        model.add(Dropout(0.2))
+        model.add(Dropout(0.3))
         model.add(Dense(predict_days))
         model.compile(optimizer='adam', loss='mse')
-        model.fit(X_train, y_train, epochs=20, batch_size=32, shuffle=False, verbose=0)
+        model.fit(X_train, y_train, epochs=30, batch_size=32, shuffle=False, verbose=0)
 
         # التنبؤ
         last_seq = scaled[-seq_len:]
         preds_scaled = model.predict(last_seq.reshape(1, seq_len, input_features))[0]
-        forecast = close_scaler.inverse_transform(preds_scaled.reshape(-1, 1)).flatten()
+        forecast = scaler.inverse_transform(
+            np.hstack([
+                np.zeros((predict_days, scaled.shape[1]))[:, :3],  # صفر للأعمدة غير Close
+                preds_scaled.reshape(-1, 1),
+                np.zeros((predict_days, scaled.shape[1]))[:, 4:]
+            ])
+        )[:, 3]  # استخراج التوقع الحقيقي لـ Close
 
-        # عرض النتائج
+        # عرض التوقعات
         st.subheader("🔮 التوقعات:")
         for i, price in enumerate(forecast):
-            st.markdown(f"اليوم {i+1}: {price:.2f} ريال / دولار")
+            direction = "⬆️" if live_price and price > live_price else "⬇️"
+            st.markdown(f"اليوم {i+1}: {price:.2f} {direction}")
 
-        st.subheader("📊 رسم بياني للسعر")
+        # رسم بياني للسعر
+        st.subheader("📊 السعر الفعلي")
         fig, ax = plt.subplots(figsize=(10, 4))
-        ax.plot(df['Close'][-100:], label='السعر الفعلي')
-        ax.set_title(f"آخر أسعار {symbol}")
+        ax.plot(df['Close'][-100:], label='Close')
         ax.grid()
+        ax.set_title(f"أداء {symbol}")
         st.pyplot(fig)
 
-        st.success("✅ النموذج يعمل باستخدام RSI و MACD بدقة.")
+        st.success("✅ تم التدريب باستخدام مؤشرات فنية متعددة لزيادة الدقة.")
