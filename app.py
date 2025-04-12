@@ -69,22 +69,22 @@ if st.button("🚀 ابدأ التنبؤ"):
         clean_close = df['Close'].dropna().astype(float).fillna(method='ffill')
 
         # المؤشرات الفنية بتنسيق سليم
-        clean_close_for_rsi = df['Close'].reset_index(drop=True).astype(float).fillna(method='ffill')
-rsi_indicator = ta.momentum.RSIIndicator(close=clean_close_for_rsi, window=14)
-df['RSI'] = rsi_indicator.rsi().reindex(df.index).fillna(0)
+            clean_close_for_rsi = df['Close'].reset_index(drop=True).astype(float).fillna(method='ffill')
+    rsi_indicator = ta.momentum.RSIIndicator(close=clean_close_for_rsi, window=14)
+    df['RSI'] = rsi_indicator.rsi().reindex(df.index).fillna(0)
 
-        df['EMA20'] = ta.trend.EMAIndicator(close=df['Close'], window=20).ema_indicator().fillna(0)
-        df['EMA50'] = ta.trend.EMAIndicator(close=df['Close'], window=50).ema_indicator().fillna(0)
+    df['EMA20'] = ta.trend.EMAIndicator(close=df['Close'], window=20).ema_indicator().fillna(0)
+    df['EMA50'] = ta.trend.EMAIndicator(close=df['Close'], window=50).ema_indicator().fillna(0)
 
-        macd = ta.trend.MACD(close=df['Close'])
-        df['MACD'] = macd.macd().fillna(0)
+    macd = ta.trend.MACD(close=df['Close'])
+    df['MACD'] = macd.macd().fillna(0)
 
-        try:
-            stoch = ta.momentum.StochasticOscillator(
-                high=df['High'], low=df['Low'], close=df['Close']
-            )
-            df['Stoch_K'] = stoch.stoch().fillna(0)
-            df['Stoch_D'] = stoch.stoch_signal().fillna(0)
+    try:
+        stoch = ta.momentum.StochasticOscillator(
+            high=df['High'], low=df['Low'], close=df['Close']
+        )
+        df['Stoch_K'] = stoch.stoch().fillna(0)
+        df['Stoch_D'] = stoch.stoch_signal().fillna(0)
         except Exception as e:
             st.warning(f"⚠️ تعذر حساب مؤشر Stochastic: {e}")
             df['Stoch_K'] = 0
