@@ -56,7 +56,11 @@ if st.button("🚀 ابدأ التنبؤ"):
 
         df = df[df['Close'].notna()]
         df['Close'] = df['Close'].astype(float)
-        clean_close = df['Close'].squeeze().astype(float)
+
+        clean_close = df['Close'].copy()
+        if isinstance(clean_close, pd.DataFrame):
+            clean_close = clean_close.iloc[:, 0]
+        clean_close = pd.Series(clean_close.values, index=df.index).astype(float)
 
         df['RSI'] = ta.momentum.RSIIndicator(close=clean_close).rsi()
         df['EMA20'] = ta.trend.EMAIndicator(close=clean_close, window=20).ema_indicator()
@@ -119,6 +123,11 @@ if st.button("🚀 ابدأ التنبؤ"):
 
         forecast = scalers['Close'].inverse_transform(np.array(forecast_scaled).reshape(-1, 1)).flatten()
         last_real = float(df['Close'].iloc[-1])
+
+        if live_price:
+            st.info(f"💲 السعر اللحظي من الإنترنت: {live_price:.2f}")
+        else:
+            st.info(f"🔒 السعر الأخير للإغلاق: {last_real:.2f}")
 
         st.subheader("📈 التوقعات القادمة:")
         forecast_dates = pd.date_range(start=df.index[-1], periods=predict_days+1, freq='B')[1:]
