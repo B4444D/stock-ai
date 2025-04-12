@@ -1,44 +1,54 @@
 import streamlit as st
 import yfinance as yf
-import pandas as pd
-import matplotlib.pyplot as plt
+import requests
 
-st.set_page_config(page_title="عرض بيانات السهم", layout="centered")
-st.title("📊 تطبيق عرض بيانات السهم")
+st.set_page_config(page_title="سعر السوق اللحظي", layout="centered")
+st.title("📊 جلب السعر اللحظي من الأسواق")
 
-# اختيار السوق
+# إعداد مفتاح Alpha Vantage
+api_key = "EPOU1W12WSZL18ST"
+
+# اختيار السوق والرمز
 market = st.selectbox("🗂️ اختر السوق:", ["🇺🇸 السوق الأمريكي", "🏦 السوق السعودي", "₿ العملات الرقمية"])
 user_input = st.text_input("🔍 أدخل رمز السهم أو العملة:", "AAPL")
 
-# تجهيز الرمز
-if market == "🏦 السوق السعودي":
-    ticker = user_input.upper() + ".SR"
-elif market == "₿ العملات الرقمية":
-    ticker = user_input.upper() + "-USD"
-else:
-    ticker = user_input.upper()
-
-# زر البدء
-if st.button("📥 تحميل البيانات"):
-    with st.spinner("جاري تحميل البيانات..."):
-        df = yf.download(ticker, start="2021-01-01")
-
-        if df.empty:
-            st.error("❌ لم يتم العثور على بيانات.")
-        else:
-            st.success("✅ تم تحميل البيانات بنجاح!")
-
-            st.subheader("🔚 السعر الأخير:")
-            valid_closes = df['Close'].dropna()
-            if not valid_closes.empty:
-                last_close = valid_closes.iloc[-1]
-                st.write(f"آخر إغلاق: {last_close:.2f}")
+# زر تنفيذ
+if st.button("📥 جلب السعر اللحظي"):
+    if market == "🏦 السوق السعودي":
+        ticker = user_input.upper() + ".SR"
+        try:
+            df = yf.download(ticker, period="1d", interval="1m")
+            if not df.empty and 'Close' in df.columns:
+                last_price = df['Close'].dropna().iloc[-1]
+                st.success(f"✅ السعر اللحظي لـ {user_input.upper()}: {last_price:.2f} ريال")
             else:
-                st.warning("⚠️ لا توجد بيانات إغلاق متوفرة.")
+                st.warning("⚠️ لم يتم العثور على بيانات حديثة.")
+        except:
+            st.error("❌ تعذر تحميل السعر من yfinance")
 
-            st.subheader("📈 الرسم البياني:")
-            fig, ax = plt.subplots(figsize=(12, 4))
-            ax.plot(df['Close'], label='سعر الإغلاق')
-            ax.set_title(f"أداء {ticker}")
-            ax.grid()
-            st.pyplot(fig)
+    elif market == "🇺🇸 السوق الأمريكي":
+        url = f"https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol={user_input.upper()}&apikey={api_key}"
+        response = requests.get(url)
+        data = response.json()
+        if "Global Quote" in data and "05. price" in data["Global Quote"]:
+            try:
+                price = float(data["Global Quote"]["05. price"])
+                st.success(f"✅ السعر اللحظي لـ {user_input.upper()}: {price:.2f} دولار")
+            except:
+                st.warning("⚠️ فشل في تحويل السعر.")
+        else:
+            st.warning("⚠️ تعذر العثور على السعر. تأكد من الرمز.")
+
+    elif market == "₿ العملات الرقمية":
+        url = f"https://www.alphavantage.co/query?function=DIGITAL_CURRENCY_DAILY&symbol={user_input.upper()}&market=USD&apikey={api_key}"
+        response = requests.get(url)
+        data = response.json()
+        if "Time Series (Digital Currency Daily)" in data:
+            try:
+                latest = list(data["Time Series (Digital Currency Daily)"].values())[0]
+                price = float(latest['1a. open (USD)'])
+                st.success(f"✅ السعر اللحظي لـ {user_input.upper()}: {price:.2f} دولار")
+            except:
+                st.warning("⚠️ فشل في قراءة بيانات العملة.")
+        else:
+            st.warning("⚠️ تعذر جلب بيانات العملة الرقمية. تأكد من الرمز مثل BTC أو ETH.")
