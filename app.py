@@ -56,13 +56,14 @@ if st.button("🚀 ابدأ التنبؤ"):
 
         df = df[df['Close'].notna()]
         df['Close'] = df['Close'].astype(float)
+        clean_close = pd.Series(df['Close'].values, index=df.index).astype(float)
 
-        df['RSI'] = ta.momentum.RSIIndicator(close=df['Close']).rsi()
-        df['EMA20'] = ta.trend.EMAIndicator(close=df['Close'], window=20).ema_indicator()
-        df['EMA50'] = ta.trend.EMAIndicator(close=df['Close'], window=50).ema_indicator()
-        macd = ta.trend.MACD(close=df['Close'])
+        df['RSI'] = ta.momentum.RSIIndicator(close=clean_close).rsi()
+        df['EMA20'] = ta.trend.EMAIndicator(close=clean_close, window=20).ema_indicator()
+        df['EMA50'] = ta.trend.EMAIndicator(close=clean_close, window=50).ema_indicator()
+        macd = ta.trend.MACD(close=clean_close)
         df['MACD'] = macd.macd()
-        stoch = ta.momentum.StochasticOscillator(high=df['High'], low=df['Low'], close=df['Close'])
+        stoch = ta.momentum.StochasticOscillator(high=df['High'], low=df['Low'], close=clean_close)
         df['Stoch_K'] = stoch.stoch()
         df['Stoch_D'] = stoch.stoch_signal()
         df.dropna(inplace=True)
