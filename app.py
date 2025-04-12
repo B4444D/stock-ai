@@ -66,21 +66,13 @@ if st.button("🚀 ابدأ التنبؤ"):
         df = df[df['Close'].notna()]
         df['Close'] = df['Close'].astype(float)
 
-        # المؤشرات الفنية بعد التأكد من تنسيقها الصحيح
-        try:
-            clean_close_for_rsi = df['Close'].reset_index(drop=True).astype(float).fillna(method='ffill')
-            rsi_indicator = ta.momentum.RSIIndicator(close=clean_close_for_rsi, window=14)
-            df['RSI'] = rsi_indicator.rsi().reindex(df.index).fillna(0)
-
-            df['EMA20'] = ta.trend.EMAIndicator(close=df['Close'], window=20).ema_indicator().fillna(0)
-            df['EMA50'] = ta.trend.EMAIndicator(close=df['Close'], window=50).ema_indicator().fillna(0)
-
-            macd = ta.trend.MACD(close=df['Close'])
-            df['MACD'] = macd.macd().fillna(0)
-
-            stoch = ta.momentum.StochasticOscillator(high=df['High'], low=df['Low'], close=df['Close'])
-            df['Stoch_K'] = stoch.stoch().fillna(0)
-            df['Stoch_D'] = stoch.stoch_signal().fillna(0)
+        # المؤشرات الفنية (مؤشر وهمي مؤقت للاختبار فقط)
+        df['RSI'] = 0
+        df['EMA20'] = 0
+        df['EMA50'] = 0
+        df['MACD'] = 0
+        df['Stoch_K'] = 0
+        df['Stoch_D'] = 0
         except Exception as e:
             st.warning(f"⚠️ تعذر حساب المؤشرات الفنية: {e}")
             df['RSI'] = 0
