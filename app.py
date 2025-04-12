@@ -88,8 +88,7 @@ except Exception as e:
     df['Stoch_K'] = 0
     df['Stoch_D'] = 0
 
-        clean_close = df['Close'].dropna().astype(float).fillna(method='ffill')
-
+        
         # المؤشرات الفنية بتنسيق سليم
             clean_close_for_rsi = df['Close'].reset_index(drop=True).astype(float).fillna(method='ffill')
 rsi_indicator = ta.momentum.RSIIndicator(close=clean_close_for_rsi, window=14)
