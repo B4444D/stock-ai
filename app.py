@@ -63,9 +63,15 @@ if st.button("🚀 ابدأ التنبؤ"):
         df['EMA50'] = ta.trend.EMAIndicator(close=clean_close, window=50).ema_indicator()
         macd = ta.trend.MACD(close=clean_close)
         df['MACD'] = macd.macd()
+
         stoch = ta.momentum.StochasticOscillator(high=df['High'], low=df['Low'], close=clean_close)
-        df['Stoch_K'] = pd.Series(stoch.stoch(), index=df.index)
-        df['Stoch_D'] = pd.Series(stoch.stoch_signal(), index=df.index)
+        stoch_k_values = np.array(stoch.stoch()).ravel()
+        stoch_d_values = np.array(stoch.stoch_signal()).ravel()
+        min_len = min(len(df), len(stoch_k_values), len(stoch_d_values))
+        df = df.iloc[-min_len:]
+        df['Stoch_K'] = stoch_k_values[-min_len:]
+        df['Stoch_D'] = stoch_d_values[-min_len:]
+
         df.dropna(inplace=True)
 
         features = ['Open', 'High', 'Low', 'Close', 'Volume', 'RSI', 'EMA20', 'EMA50', 'MACD', 'Stoch_K', 'Stoch_D']
