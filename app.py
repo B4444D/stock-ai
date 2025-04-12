@@ -63,7 +63,8 @@ if st.button("🚀 ابدأ التنبؤ المحسن"):
         
         if market == "₿ العملات الرقمية":
             live_price, price_change = get_crypto_price(user_input.lower())
-            st.info(f"💲 السعر اللحظي: {live_price:.2f} USD | التغير 24h: {'+' if price_change > 0 else ''}{price_change:.2f}%")
+            if live_price:
+                st.info(f"💲 السعر اللحظي: {live_price:.2f} USD | التغير 24h: {'+' if price_change > 0 else ''}{price_change:.2f}%")
             df = yf.download(ticker, start=start_date, progress=False)
         else:
             df = yf.download(ticker, start=start_date, progress=False)
@@ -87,41 +88,49 @@ if st.button("🚀 ابدأ التنبؤ المحسن"):
         clean_close = pd.Series(clean_close.values, index=df.index).astype(float)
 
         # إضافة المؤشرات الفنية المحسنة
-        df['RSI'] = ta.momentum.RSIIndicator(close=clean_close, window=14).rsi()
-        df['EMA20'] = ta.trend.EMAIndicator(close=clean_close, window=20).ema_indicator()
-        df['EMA50'] = ta.trend.EMAIndicator(close=clean_close, window=50).ema_indicator()
-        df['EMA200'] = ta.trend.EMAIndicator(close=clean_close, window=200).ema_indicator()
-        
-        # Bollinger Bands
-        bb = ta.volatility.BollingerBands(close=clean_close, window=20, window_dev=2)
-        df['BB_upper'] = bb.bollinger_hband()
-        df['BB_middle'] = bb.bollinger_mavg()
-        df['BB_lower'] = bb.bollinger_lband()
-        
-        # MACD
-        macd = ta.trend.MACD(close=clean_close, window_slow=26, window_fast=12, window_sign=9)
-        df['MACD'] = macd.macd()
-        df['MACD_signal'] = macd.macd_signal()
-        df['MACD_diff'] = macd.macd_diff()
-        
-        # Stochastic
         try:
+            df['RSI'] = ta.momentum.RSIIndicator(close=clean_close, window=14).rsi()
+            df['EMA20'] = ta.trend.EMAIndicator(close=clean_close, window=20).ema_indicator()
+            df['EMA50'] = ta.trend.EMAIndicator(close=clean_close, window=50).ema_indicator()
+            df['EMA200'] = ta.trend.EMAIndicator(close=clean_close, window=200).ema_indicator()
+            
+            # Bollinger Bands
+            bb = ta.volatility.BollingerBands(close=clean_close, window=20, window_dev=2)
+            df['BB_upper'] = bb.bollinger_hband()
+            df['BB_middle'] = bb.bollinger_mavg()
+            df['BB_lower'] = bb.bollinger_lband()
+            
+            # MACD
+            macd = ta.trend.MACD(close=clean_close, window_slow=26, window_fast=12, window_sign=9)
+            df['MACD'] = macd.macd()
+            df['MACD_signal'] = macd.macd_signal()
+            df['MACD_diff'] = macd.macd_diff()
+            
+            # Stochastic (الجزء المعدل)
+            high = df['High'].values.flatten()
+            low = df['Low'].values.flatten()
+            close = clean_close.values.flatten()
+            
             stoch = ta.momentum.StochasticOscillator(
-                high=df['High'], low=df['Low'], close=df['Close'], window=14, smooth_window=3)
+                high=pd.Series(high, index=df.index),
+                low=pd.Series(low, index=df.index),
+                close=pd.Series(close, index=df.index),
+                window=14,
+                smooth_window=3
+            )
             df['Stoch_K'] = stoch.stoch()
             df['Stoch_D'] = stoch.stoch_signal()
+
+            # VWAP
+            df['VWAP'] = (df['Volume'] * (df['High'] + df['Low'] + df['Close']) / 3).cumsum() / df['Volume'].cumsum()
         except Exception as e:
-            st.warning(f"⚠️ تعذر حساب مؤشر Stochastic: {e}")
-            df['Stoch_K'] = 50
-            df['Stoch_D'] = 50
+            st.error(f"❌ حدث خطأ في حساب المؤشرات الفنية: {str(e)}")
+            st.stop()
 
-        # VWAP
-        df['VWAP'] = (df['Volume'] * (df['High'] + df['Low'] + df['Close']) / 3).cumsum() / df['Volume'].cumsum()
-        
         # إزالة القيم المفقودة بعد إضافة المؤشرات
-        df.dropna(inplace=True)
+        df = df.dropna()
 
-        # تحجيم البيانات
+        # تحجيم البيانات (الجزء المعدل)
         features = ['Open', 'High', 'Low', 'Close', 'Volume', 'RSI', 
                    'EMA20', 'EMA50', 'EMA200', 'BB_upper', 'BB_middle', 
                    'BB_lower', 'MACD', 'MACD_signal', 'MACD_diff', 
@@ -130,9 +139,13 @@ if st.button("🚀 ابدأ التنبؤ المحسن"):
         scalers = {}
         scaled_data = pd.DataFrame(index=df.index)
         for col in features:
-            scaler = MinMaxScaler(feature_range=(0, 1))
-            scaled_data[col] = scaler.fit_transform(df[[col]])
-            scalers[col] = scaler
+            try:
+                scaler = MinMaxScaler(feature_range=(0, 1))
+                scaled_data[col] = scaler.fit_transform(df[col].values.reshape(-1, 1)).flatten()
+                scalers[col] = scaler
+            except Exception as e:
+                st.error(f"❌ خطأ في تحجيم العمود {col}: {str(e)}")
+                st.stop()
 
         # إعداد بيانات التدريب
         sequence_length = 60
@@ -142,6 +155,10 @@ if st.button("🚀 ابدأ التنبؤ المحسن"):
             y.append(scaled_data.iloc[i:i+predict_days]['Close'].values)
 
         X, y = np.array(X), np.array(y)
+        if len(X) == 0:
+            st.error("❌ لا توجد بيانات كافية للتدريب. حاول زيادة عدد الأيام التاريخية.")
+            st.stop()
+
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
         # بناء النموذج المحسن
