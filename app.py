@@ -29,7 +29,11 @@ if st.button("📥 تحميل البيانات"):
             st.success("✅ تم تحميل البيانات بنجاح!")
 
             st.subheader("🔚 السعر الأخير:")
-            st.write(f"آخر إغلاق: {df['Close'].iloc[-1]:.2f}")
+            try:
+                last_close = df['Close'].dropna().iloc[-1]
+                st.write(f"آخر إغلاق: {last_close:.2f}")
+            except:
+                st.warning("⚠️ تعذر عرض السعر الأخير.")
 
             st.subheader("📈 الرسم البياني:")
             fig, ax = plt.subplots(figsize=(12, 4))
