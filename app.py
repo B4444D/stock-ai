@@ -67,7 +67,8 @@ if st.button("🚀 ابدأ التنبؤ"):
         df['Close'] = df['Close'].astype(float)
 
         clean_close = df['Close'].dropna().astype(float).fillna(method='ffill')
-        df['RSI'] = ta.momentum.RSIIndicator(close=clean_close).rsi()
+        rsi_indicator = ta.momentum.RSIIndicator(close=df['Close'], window=14)
+df['RSI'] = rsi_indicator.rsi().fillna(0)
         df['EMA20'] = ta.trend.EMAIndicator(close=clean_close, window=20).ema_indicator()
         df['EMA50'] = ta.trend.EMAIndicator(close=clean_close, window=50).ema_indicator()
         macd = ta.trend.MACD(close=clean_close)
