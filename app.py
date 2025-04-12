@@ -61,9 +61,12 @@ if st.button("🚀 ابدأ التنبؤ"):
 
         df = df[['Close', 'RSI', 'MACD']].dropna()
         scaler = MinMaxScaler()
+                # تطبيع Close لوحده
         close_scaler = MinMaxScaler()
-df['Close_scaled'] = close_scaler.fit_transform(df[['Close']])
+        df['Close_scaled'] = close_scaler.fit_transform(df[['Close']])
 
+        # تطبيع كامل المدخلات للنموذج
+        scaler = MinMaxScaler()
         scaled = scaler.fit_transform(df[['Close_scaled', 'RSI', 'MACD']].values)
         input_features = scaled.shape[1]
 
