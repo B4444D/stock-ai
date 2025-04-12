@@ -79,8 +79,8 @@ if st.button("🚀 ابدأ التنبؤ"):
             df['Stoch_D'] = stoch.stoch_signal().fillna(0)
         except Exception as e:
             st.warning(f"⚠️ تعذر حساب مؤشر Stochastic: {e}")
-            df['Stoch_K'] = 0
-            df['Stoch_D'] = 0
+            df['Stoch_K'] = 50
+            df['Stoch_D'] = 50
 
         df.dropna(inplace=True)
 
