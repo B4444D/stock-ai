@@ -22,7 +22,6 @@ user_input = st.text_input("🔍 أدخل رمز السهم أو العملة:",
 
 if market == "🏦 السوق السعودي":
     ticker = user_input.upper() + ".SR"
-    saudisymbol = user_input
 elif market == "₿ العملات الرقمية":
     ticker = user_input.upper() + "-USD"
 else:
@@ -31,28 +30,13 @@ else:
 predict_days = st.selectbox("📆 عدد الأيام المستقبلية للتوقع:", [3, 5, 7])
 
 def get_crypto_price(symbol):
-    crypto_map = {
-        "BTC": "bitcoin",
-        "ETH": "ethereum",
-        "XRP": "ripple",
-        "DOGE": "dogecoin",
-        "ADA": "cardano",
-        "BNB": "binancecoin",
-        "SHIB": "shiba-inu",
-        "SOL": "solana",
-        "TRX": "tron",
-        "AVAX": "avalanche-2"
-    }
-    coin_id = crypto_map.get(symbol.upper(), None)
-    if not coin_id:
-        return None, None
-    url = f"https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids={coin_id}"
+    url = f"https://api.coingecko.com/api/v3/simple/price?ids={symbol}&vs_currencies=usd&include_24hr_change=true"
     response = requests.get(url)
     try:
-        data = response.json()[0]
-        price = data['current_price']
-        change_24h = data['price_change_percentage_24h']
-        return float(price), float(change_24h)
+        data = response.json()
+        price = data[symbol]['usd']
+        change = data[symbol]['usd_24h_change']
+        return float(price), float(change)
     except:
         return None, None
 
@@ -60,7 +44,7 @@ if st.button("🚀 ابدأ التنبؤ"):
     with st.spinner("جاري تحميل البيانات وتدريب النموذج..."):
 
         if market == "₿ العملات الرقمية":
-            live_price, _ = get_crypto_price(user_input)
+            live_price, _ = get_crypto_price(user_input.lower())
         else:
             live_price = None
 
@@ -69,10 +53,10 @@ if st.button("🚀 ابدأ التنبؤ"):
             st.error("❌ لم يتم العثور على بيانات لهذا الرمز.")
             st.stop()
 
-        df.dropna(subset=['Close'], inplace=True)  # تنظيف أي صف فيه NaN في Close
-df['Close'] = df['Close'].astype(float)    # تأكد أن النوع رقمي 100%
-df['RSI'] = ta.momentum.RSIIndicator(close=df['Close']).rsi()
+        df.dropna(subset=['Close'], inplace=True)
+        df['Close'] = df['Close'].astype(float)
 
+        df['RSI'] = ta.momentum.RSIIndicator(close=df['Close']).rsi()
         df['EMA20'] = ta.trend.EMAIndicator(close=df['Close'], window=20).ema_indicator()
         df['EMA50'] = ta.trend.EMAIndicator(close=df['Close'], window=50).ema_indicator()
         macd = ta.trend.MACD(close=df['Close'])
