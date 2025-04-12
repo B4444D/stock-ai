@@ -5,13 +5,21 @@ import numpy as np
 import ta
 import matplotlib.pyplot as plt
 import requests
+import random
+import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.models import Sequential
+from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 import os
 from datetime import date
 import glob
+
+# تثبيت القيم العشوائية
+seed = 42
+np.random.seed(seed)
+random.seed(seed)
+tf.random.set_seed(seed)
 
 st.set_page_config(page_title="نموذج التنبؤ الذكي", layout="centered")
 st.title("📊 هذا تطبيق تجريبي للتنبؤ — لا يمثل نصيحة مالية")
@@ -34,7 +42,7 @@ def get_crypto_price(symbol):
     try:
         data = response.json()
         price = data[symbol]['usd']
-        change = data[symbol]['usd_24hr_change']
+        change = data[symbol]['usd_24h_change']
         return float(price), float(change)
     except:
         return None, None
@@ -107,14 +115,21 @@ if st.button("🚀 ابدأ التنبؤ"):
         X, y = np.array(X), np.array(y)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
-        model = Sequential()
-        model.add(LSTM(100, return_sequences=True, input_shape=(X.shape[1], X.shape[2])))
-        model.add(Dropout(0.2))
-        model.add(LSTM(100))
-        model.add(Dropout(0.2))
-        model.add(Dense(predict_days))
-        model.compile(optimizer='adam', loss='mean_squared_error')
-        model.fit(X_train, y_train, epochs=30, batch_size=64, verbose=0)
+        # تحميل أو تدريب النموذج
+        if os.path.exists("trained_model.h5"):
+            model = load_model("trained_model.h5")
+            st.info("✅ تم تحميل النموذج المدرب مسبقًا.")
+        else:
+            model = Sequential()
+            model.add(LSTM(100, return_sequences=True, input_shape=(X.shape[1], X.shape[2])))
+            model.add(Dropout(0.2))
+            model.add(LSTM(100))
+            model.add(Dropout(0.2))
+            model.add(Dense(predict_days))
+            model.compile(optimizer='adam', loss='mean_squared_error')
+            model.fit(X_train, y_train, epochs=30, batch_size=64, verbose=0)
+            model.save("trained_model.h5")
+            st.success("✅ تم تدريب النموذج لأول مرة وحفظه.")
 
         last_sequence = scaled_data[-sequence_length:].values
         forecast_scaled = []
