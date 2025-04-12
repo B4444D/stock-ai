@@ -5,7 +5,6 @@ import numpy as np
 import ta
 import matplotlib.pyplot as plt
 import requests
-from bs4 import BeautifulSoup
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
@@ -51,6 +50,10 @@ if st.button("🚀 ابدأ التنبؤ"):
         df = yf.download(ticker, start="2018-01-01")
         if df.empty:
             st.error("❌ لم يتم العثور على بيانات لهذا الرمز.")
+            st.stop()
+
+        if 'Close' not in df.columns:
+            st.error("⚠️ لا توجد بيانات سعر إغلاق (Close) لهذا الرمز.")
             st.stop()
 
         df.dropna(subset=['Close'], inplace=True)
@@ -130,7 +133,6 @@ if st.button("🚀 ابدأ التنبؤ"):
         ax.grid()
         st.pyplot(fig)
 
-        # مراجعة التوقعات السابقة
         st.subheader("📋 مراجعة التوقعات السابقة")
         review_files = glob.glob("forecasts/forecast_*.csv")
         review_results = []
