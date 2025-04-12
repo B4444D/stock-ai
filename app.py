@@ -71,16 +71,16 @@ if st.button("🚀 ابدأ التنبؤ"):
 
         try:
             stoch = ta.momentum.StochasticOscillator(
-                high=df['High'],
-                low=df['Low'],
-                close=clean_close
-            )
-            df['Stoch_K'] = stoch.stoch().fillna(0)
-            df['Stoch_D'] = stoch.stoch_signal().fillna(0)
-        except Exception as e:
-            st.warning(f"⚠️ تعذر حساب مؤشر Stochastic: {e}")
-            df['Stoch_K'] = 50
-            df['Stoch_D'] = 50
+        high=pd.Series(df['High'].values.flatten(), index=df.index),  # تحويل إلى 1D
+        low=pd.Series(df['Low'].values.flatten(), index=df.index),    # تحويل إلى 1D
+        close=pd.Series(clean_close.values.flatten(), index=df.index) # تحويل إلى 1D
+    )
+    df['Stoch_K'] = stoch.stoch().fillna(0)
+    df['Stoch_D'] = stoch.stoch_signal().fillna(0)
+except Exception as e:
+    st.warning(f"⚠️ تعذر حساب مؤشر Stochastic: {e}")
+    df['Stoch_K'] = 50  # قيمة متوسطة افتراضية
+    df['Stoch_D'] = 50  # قيمة متوسطة افتراضية
 
         df.dropna(inplace=True)
 
