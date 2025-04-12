@@ -1,3 +1,50 @@
+import streamlit as st
+import yfinance as yf
+import requests
+import pandas as pd
+import numpy as np
+import ta
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Dropout
+
+st.set_page_config(page_title="نموذج تنبؤ بالأسعار", layout="centered")
+st.title("🔮 تنبؤ الأسعار باستخدام المؤشرات الفنية")
+
+api_key = "cvtcvi1r01qhup0vnjrgcvtcvi1r01qhup0vnjs0"
+
+market = st.selectbox("🗂️ اختر السوق:", ["🇺🇸 السوق الأمريكي", "🏦 السوق السعودي", "₿ العملات الرقمية"])
+symbol = st.text_input("🔍 أدخل رمز السهم أو العملة:", "AAPL").upper()
+predict_days = st.selectbox("📅 عدد الأيام المستقبلية للتنبؤ:", [3, 5, 7])
+
+if st.button("🚀 ابدأ التنبؤ"):
+    with st.spinner("📡 تحميل البيانات وتدريب النموذج..."):
+
+        # تحميل البيانات حسب السوق
+        if market == "🏦 السوق السعودي":
+            ticker = symbol + ".SR"
+            df = yf.download(ticker, period="6mo")
+        elif market == "🇺🇸 السوق الأمريكي":
+            ticker = symbol
+            df = yf.download(ticker, period="6mo")
+        elif market == "₿ العملات الرقمية":
+            ticker = symbol + "-USD"
+            df = yf.download(ticker, period="6mo")
+
+        if df.empty or 'Close' not in df:
+            st.error("❌ لم يتم تحميل البيانات بنجاح.")
+            st.stop()
+
+        # تنظيف البيانات
+        df = df[['Close']].dropna()
+        close_clean = df['Close'].astype(float)
+
+        # حساب RSI و MACD
+        rsi_values = ta.momentum.RSIIndicator(close=close_clean, window=14).rsi()
+        df['RSI'] = rsi_values.reindex(df.index).fillna(0)
+
         macd_values = ta.trend.MACD(close=close_clean)
         df['MACD'] = macd_values.macd().reindex(df.index).fillna(0)
 
