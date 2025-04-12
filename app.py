@@ -69,8 +69,9 @@ if st.button("🚀 ابدأ التنبؤ"):
         clean_close = df['Close'].dropna().astype(float).fillna(method='ffill')
 
         # المؤشرات الفنية بتنسيق سليم
-        rsi_indicator = ta.momentum.RSIIndicator(close=df['Close'], window=14)
-        df['RSI'] = rsi_indicator.rsi().fillna(0)
+        clean_close_for_rsi = df['Close'].reset_index(drop=True).astype(float).fillna(method='ffill')
+rsi_indicator = ta.momentum.RSIIndicator(close=clean_close_for_rsi, window=14)
+df['RSI'] = rsi_indicator.rsi().reindex(df.index).fillna(0)
 
         df['EMA20'] = ta.trend.EMAIndicator(close=df['Close'], window=20).ema_indicator().fillna(0)
         df['EMA50'] = ta.trend.EMAIndicator(close=df['Close'], window=50).ema_indicator().fillna(0)
