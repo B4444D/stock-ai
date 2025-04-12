@@ -49,7 +49,8 @@ if st.button("🚀 ابدأ التنبؤ"):
 
         # إضافة مؤشرات RSI و MACD
         import ta
-        df['RSI'] = ta.momentum.RSIIndicator(close=df['Close'], window=14).rsi().fillna(0)
+        close_clean = pd.Series(df['Close'].values, index=df.index).astype(float)
+df['RSI'] = ta.momentum.RSIIndicator(close=close_clean, window=14).rsi().fillna(0)
         macd = ta.trend.MACD(close=df['Close'])
         df['MACD'] = macd.macd().fillna(0)
 
