@@ -47,7 +47,7 @@ if st.button("🚀 ابدأ التنبؤ"):
         else:
             live_price = None
 
-        df = yf.download(ticker, start="2018-01-01")
+        df = yf.download(ticker, start="2021-01-01")
 
         if df.empty or 'Close' not in df.columns:
             st.error("❌ لم يتم العثور على بيانات سعر الإغلاق (Close) لهذا الرمز.")
