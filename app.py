@@ -3,14 +3,15 @@ import yfinance as yf
 import requests
 import pandas as pd
 import numpy as np
+import ta
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 
-st.set_page_config(page_title="تنبؤ الأسعار", layout="centered")
-st.title("🔮 نموذج تنبؤ الأسعار مع السعر اللحظي")
+st.set_page_config(page_title="نموذج تنبؤ بالأسعار", layout="centered")
+st.title("🔮 تنبؤ الأسعار باستخدام المؤشرات الفنية")
 
 api_key = "cvtcvi1r01qhup0vnjrgcvtcvi1r01qhup0vnjs0"
 
@@ -21,66 +22,51 @@ predict_days = st.selectbox("📅 عدد الأيام المستقبلية لل�
 if st.button("🚀 ابدأ التنبؤ"):
     with st.spinner("📡 تحميل البيانات وتدريب النموذج..."):
 
-        # الحصول على السعر اللحظي حسب السوق
-        live_price = None
+        # تحميل البيانات حسب السوق
         if market == "🏦 السوق السعودي":
             ticker = symbol + ".SR"
             df = yf.download(ticker, period="6mo")
-            try:
-                live_price = float(df['Close'].dropna().iloc[-1])
-            except:
-                live_price = None
         elif market == "🇺🇸 السوق الأمريكي":
             ticker = symbol
             df = yf.download(ticker, period="6mo")
-            url = f"https://finnhub.io/api/v1/quote?symbol={symbol}&token={api_key}"
-            r = requests.get(url).json()
-            live_price = float(r["c"]) if "c" in r and r["c"] else None
         elif market == "₿ العملات الرقمية":
             ticker = symbol + "-USD"
             df = yf.download(ticker, period="6mo")
-            url = f"https://finnhub.io/api/v1/quote?symbol=BINANCE:{symbol}USDT&token={api_key}"
-            r = requests.get(url).json()
-            live_price = float(r["c"]) if "c" in r and r["c"] else None
 
-        if df.empty:
-            st.error("❌ لا توجد بيانات كافية.")
+        if df.empty or 'Close' not in df:
+            st.error("❌ لم يتم تحميل البيانات بنجاح.")
             st.stop()
 
-        # إضافة مؤشرات RSI و MACD
-        import ta
-                # تنظيف الإغلاق
-        close_clean = df['Close'].squeeze().astype(float)
+        # تنظيف البيانات
+        df = df[['Close']].dropna()
+        close_clean = df['Close'].astype(float)
 
-        # RSI
+        # حساب RSI و MACD
         df['RSI'] = ta.momentum.RSIIndicator(close=close_clean, window=14).rsi().fillna(0)
-
-        # MACD
         macd = ta.trend.MACD(close=close_clean)
         df['MACD'] = macd.macd().fillna(0)
 
-        df = df[['Close', 'RSI', 'MACD']].dropna()
-        scaler = MinMaxScaler()
-                # تطبيع Close لوحده
+        # التطبيع
         close_scaler = MinMaxScaler()
         df['Close_scaled'] = close_scaler.fit_transform(df[['Close']])
 
-        # تطبيع كامل المدخلات للنموذج
         scaler = MinMaxScaler()
-        scaled = scaler.fit_transform(df[['Close_scaled', 'RSI', 'MACD']].values)
-        input_features = scaled.shape[1]
+        scaled = scaler.fit_transform(df[['Close_scaled', 'RSI', 'MACD']])
 
-        sequence_len = 60
+        # تجهيز بيانات التدريب
+        seq_len = 60
         X, y = [], []
-        for i in range(sequence_len, len(scaled) - predict_days):
-            X.append(scaled[i-sequence_len:i])
+        for i in range(seq_len, len(scaled) - predict_days):
+            X.append(scaled[i-seq_len:i])
             y.append(scaled[i:i+predict_days, 0])
 
         X, y = np.array(X), np.array(y)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
+        # بناء النموذج
+        input_features = X.shape[2]
         model = Sequential()
-        model.add(LSTM(64, return_sequences=True, input_shape=(sequence_len, input_features)))
+        model.add(LSTM(64, return_sequences=True, input_shape=(seq_len, input_features)))
         model.add(Dropout(0.2))
         model.add(LSTM(64))
         model.add(Dropout(0.2))
@@ -88,18 +74,21 @@ if st.button("🚀 ابدأ التنبؤ"):
         model.compile(optimizer='adam', loss='mse')
         model.fit(X_train, y_train, epochs=10, batch_size=32, verbose=0)
 
-        last_seq = scaled[-sequence_len:]
-        input_features = scaled.shape[1]
-        preds_scaled = model.predict(last_seq.reshape(1, sequence_len, input_features))[0]
+        # التنبؤ
+        last_seq = scaled[-seq_len:]
+        preds_scaled = model.predict(last_seq.reshape(1, seq_len, input_features))[0]
         forecast = close_scaler.inverse_transform(preds_scaled.reshape(-1, 1)).flatten()
 
-        real_price = live_price if live_price else df['Close'].iloc[-1]
-
+        # عرض النتائج
         st.subheader("🔮 التوقعات:")
         for i, price in enumerate(forecast):
-            color = 'green' if price > real_price else 'red'
-            arrow = "📈" if price > real_price else "📉"
-            st.markdown(f"<div style='background-color:{color};padding:10px;border-radius:5px;color:white;'>اليوم {i+1}: {price:.2f} {arrow}</div>", unsafe_allow_html=True)
+            st.markdown(f"اليوم {i+1}: {price:.2f} ريال / دولار")
 
-        st.subheader("📊 السعر الحقيقي المستخدم للمقارنة:")
-        st.info(f"{real_price:.2f}")
+        st.subheader("📊 رسم بياني للسعر")
+        fig, ax = plt.subplots(figsize=(10, 4))
+        ax.plot(df['Close'][-100:], label='السعر الفعلي')
+        ax.set_title(f"آخر أسعار {symbol}")
+        ax.grid()
+        st.pyplot(fig)
+
+        st.success("✅ النموذج يعمل باستخدام RSI و MACD بدقة.")
