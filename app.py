@@ -14,7 +14,7 @@ import random
 import os
 
 st.set_page_config(page_title="نموذج تنبؤ متقدم", layout="centered")
-st.title("🔮  نموذج تجريبي لتنبؤ أسعار الأسهم ولا يعتبر نصيحة مالية ")
+st.title("📊 نموذج تجريبي لتنبؤ أسعار الأسهم — لا يعتبر نصيحة مالية")
 
 # تثبيت القيم العشوائية
 seed = 42
@@ -67,6 +67,10 @@ if st.button("🚀 ابدأ التنبؤ"):
             st.info(f"💰 السعر اللحظي لـ {symbol}: {live_price:.2f}")
 
         # حساب المؤشرات الفنية
+        # Stochastic Oscillator
+        stoch = ta.momentum.StochasticOscillator(high=df['High'], low=df['Low'], close=close_clean, window=14, smooth_window=3)
+        df['Stoch_K'] = stoch.stoch().reindex(df.index).fillna(0)
+        df['Stoch_D'] = stoch.stoch_signal().reindex(df.index).fillna(0)
         df = df.dropna()
         close_clean = pd.Series(df['Close'].values.flatten(), index=df.index).astype(float)
 
@@ -76,7 +80,7 @@ if st.button("🚀 ابدأ التنبؤ"):
         df['EMA20'] = ta.trend.EMAIndicator(close=close_clean, window=20).ema_indicator().fillna(0)
         df['EMA50'] = ta.trend.EMAIndicator(close=close_clean, window=50).ema_indicator().fillna(0)
 
-        features = ['Open', 'High', 'Low', 'Close', 'Volume', 'RSI', 'MACD', 'EMA20', 'EMA50']
+        features = ['Open', 'High', 'Low', 'Close', 'Volume', 'RSI', 'MACD', 'EMA20', 'EMA50', 'Stoch_K', 'Stoch_D']
         df = df[features].dropna()
 
         # التطبيع
@@ -102,7 +106,7 @@ if st.button("🚀 ابدأ التنبؤ"):
         model.add(Dropout(0.3))
         model.add(Dense(predict_days))
         model.compile(optimizer='adam', loss='mse')
-        model.fit(X_train, y_train, epochs=30, batch_size=32, shuffle=False, verbose=0)
+        model.fit(X_train, y_train, epochs=50, batch_size=32, shuffle=False, verbose=0)
 
         # التنبؤ
         last_seq = scaled[-seq_len:]
@@ -118,6 +122,10 @@ if st.button("🚀 ابدأ التنبؤ"):
         # عرض التوقعات
         st.subheader("🔮 التوقعات:")
         for i, price in enumerate(forecast):
+            acc = 100 - abs(price - live_price) / live_price * 100 if live_price else None
+            acc_display = f" — الدقة: {acc:.2f}%" if acc else ""
+            direction = "⬆️" if live_price and price > live_price else "⬇️"
+            st.markdown(f"اليوم {i+1}: {price:.2f} {direction}{acc_display}")
             direction = "⬆️" if live_price and price > live_price else "⬇️"
             st.markdown(f"اليوم {i+1}: {price:.2f} {direction}")
 
