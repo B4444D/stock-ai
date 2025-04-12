@@ -12,7 +12,7 @@ from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 import os
-from datetime import date, datetime, timedelta
+from datetime import date
 import glob
 
 # تثبيت القيم العشوائية
@@ -55,24 +55,19 @@ if st.button("🚀 ابدأ التنبؤ"):
         else:
             live_price = None
 
-        end_date = datetime.today()
-        start_date = end_date - timedelta(days=60)
-        df = yf.download(ticker, start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
+        df = yf.download(ticker, start="2018-01-01")
 
-        if df.empty:
-            st.error("❌ لم يتم تحميل البيانات لهذا الرمز. تأكد من صحة الرمز المدخل.")
+        if df.empty or 'Close' not in df.columns:
+            st.error("❌ لم يتم العثور على بيانات سعر الإغلاق (Close) لهذا الرمز.")
+            st.write("📋 الأعمدة المتوفرة في البيانات:", df.columns.tolist())
             st.stop()
 
-        st.write("📋 الأعمدة المتوفرة في البيانات:", df.columns.tolist())
-
-        if 'Close' not in df.columns:
-            st.error("❌ البيانات لا تحتوي على عمود Close. قد يكون الرمز المدخل غير صحيح أو لا توجد بيانات كافية.")
-            st.stop()
-
-        df.dropna(subset=['Close'], inplace=True)
+        df = df[df['Close'].notna()]
         df['Close'] = df['Close'].astype(float)
 
         clean_close = df['Close'].copy()
+        if isinstance(clean_close, pd.DataFrame):
+            clean_close = clean_close.iloc[:, 0]
         clean_close = pd.Series(clean_close.values, index=df.index).astype(float)
 
         df['RSI'] = ta.momentum.RSIIndicator(close=clean_close).rsi()
@@ -91,8 +86,10 @@ if st.button("🚀 ابدأ التنبؤ"):
                 low=pd.Series(low, index=df.index),
                 close=pd.Series(close, index=df.index)
             )
-            df['Stoch_K'] = stoch.stoch().fillna(0).values
-            df['Stoch_D'] = stoch.stoch_signal().fillna(0).values
+            stoch_k = stoch.stoch().fillna(0)
+            stoch_d = stoch.stoch_signal().fillna(0)
+            df['Stoch_K'] = stoch_k.values
+            df['Stoch_D'] = stoch_d.values
         except Exception as e:
             st.warning(f"⚠️ تعذر حساب مؤشر Stochastic: {e}")
             df['Stoch_K'] = 0
@@ -105,9 +102,6 @@ if st.button("🚀 ابدأ التنبؤ"):
         scalers = {}
         scaled_data = pd.DataFrame(index=data.index)
         for col in features:
-            if (col not in data.columns) or (data[col].isnull().values.any()) or (data[col].dropna().shape[0] == 0):
-                st.warning(f"⚠️ العمود '{col}' يحتوي على بيانات غير كافية أو غير موجود وتم تجاهله.")
-                continue
             scaler = MinMaxScaler()
             scaled_data[col] = scaler.fit_transform(data[[col]])
             scalers[col] = scaler
@@ -118,13 +112,10 @@ if st.button("🚀 ابدأ التنبؤ"):
             X.append(scaled_data.iloc[i-sequence_length:i].values)
             y.append(scaled_data.iloc[i:i+predict_days]['Close'].values)
 
-        if len(X) == 0:
-            st.error("⚠️ البيانات غير كافية لتدريب النموذج. يرجى تجربة رمز آخر أو فترة زمنية أطول.")
-            st.stop()
-
         X, y = np.array(X), np.array(y)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
+        # تحميل أو تدريب النموذج
         if os.path.exists("trained_model.h5"):
             model = load_model("trained_model.h5")
             st.info("✅ تم تحميل النموذج المدرب مسبقًا.")
