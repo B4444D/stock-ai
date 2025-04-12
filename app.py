@@ -42,7 +42,8 @@ if st.button("🚀 ابدأ التنبؤ"):
         close_clean = df['Close'].astype(float)
 
         # حساب RSI و MACD
-        df['RSI'] = ta.momentum.RSIIndicator(close=close_clean, window=14).rsi().fillna(0)
+        rsi_values = ta.momentum.RSIIndicator(close=close_clean, window=14).rsi()
+df['RSI'] = rsi_values.reindex(df.index).fillna(0)
         macd = ta.trend.MACD(close=close_clean)
         df['MACD'] = macd.macd().fillna(0)
 
