@@ -3,6 +3,9 @@ import yfinance as yf
 import requests
 import pandas as pd
 import numpy as np
+import tensorflow as tf
+import random
+import os
 import ta
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import MinMaxScaler
@@ -18,6 +21,13 @@ api_key = "cvtcvi1r01qhup0vnjrgcvtcvi1r01qhup0vnjs0"
 market = st.selectbox("🗂️ اختر السوق:", ["🇺🇸 السوق الأمريكي", "🏦 السوق السعودي", "₿ العملات الرقمية"])
 symbol = st.text_input("🔍 أدخل رمز السهم أو العملة:", "AAPL").upper()
 predict_days = st.selectbox("📅 عدد الأيام المستقبلية للتنبؤ:", [3, 5, 7])
+
+# تثبيت القيم العشوائية لضمان ثبات النتائج
+seed = 42
+os.environ['PYTHONHASHSEED'] = str(seed)
+random.seed(seed)
+np.random.seed(seed)
+tf.random.set_seed(seed)
 
 if st.button("🚀 ابدأ التنبؤ"):
     with st.spinner("📡 تحميل البيانات وتدريب النموذج..."):
@@ -95,7 +105,7 @@ if st.button("🚀 ابدأ التنبؤ"):
         model.add(Dropout(0.2))
         model.add(Dense(predict_days))
         model.compile(optimizer='adam', loss='mse')
-        model.fit(X_train, y_train, epochs=10, batch_size=32, verbose=0)
+        model.fit(X_train, y_train, epochs=20, batch_size=32, shuffle=False, verbose=0)
 
         # التنبؤ
         last_seq = scaled[-seq_len:]
