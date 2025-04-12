@@ -49,9 +49,14 @@ if st.button("🚀 ابدأ التنبؤ"):
 
         # إضافة مؤشرات RSI و MACD
         import ta
+                # تنظيف الإغلاق
         close_clean = pd.Series(df['Close'].values, index=df.index).astype(float)
-df['RSI'] = ta.momentum.RSIIndicator(close=close_clean, window=14).rsi().fillna(0)
-        macd = ta.trend.MACD(close=df['Close'])
+
+        # RSI
+        df['RSI'] = ta.momentum.RSIIndicator(close=close_clean, window=14).rsi().fillna(0)
+
+        # MACD
+        macd = ta.trend.MACD(close=close_clean)
         df['MACD'] = macd.macd().fillna(0)
 
         df = df[['Close', 'RSI', 'MACD']].dropna()
