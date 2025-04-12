@@ -48,15 +48,13 @@ if st.button("🚀 ابدأ التنبؤ"):
             live_price = None
 
         df = yf.download(ticker, start="2018-01-01")
-        if df.empty:
-            st.error("❌ لم يتم العثور على بيانات لهذا الرمز.")
+
+        if df.empty or 'Close' not in df.columns:
+            st.error("❌ لم يتم العثور على بيانات سعر الإغلاق (Close) لهذا الرمز.")
+            st.write("📋 الأعمدة المتوفرة في البيانات:", df.columns.tolist())
             st.stop()
 
-        if 'Close' not in df.columns:
-            st.error("⚠️ لا توجد بيانات سعر إغلاق (Close) لهذا الرمز.")
-            st.stop()
-
-        df.dropna(subset=['Close'], inplace=True)
+        df = df[df['Close'].notna()]
         df['Close'] = df['Close'].astype(float)
 
         df['RSI'] = ta.momentum.RSIIndicator(close=df['Close']).rsi()
