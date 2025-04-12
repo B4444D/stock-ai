@@ -62,6 +62,7 @@ if st.button("🚀 ابدأ التنبؤ"):
         df = df[['Close', 'RSI', 'MACD']].dropna()
         scaler = MinMaxScaler()
         scaled = scaler.fit_transform(df.values)
+        input_features = scaled.shape[1]
 
         sequence_len = 60
         X, y = [], []
