@@ -13,20 +13,20 @@ user_input = st.text_input("🔍 أدخل رمز السهم أو العملة:",
 if st.button("📥 جلب السعر اللحظي"):
     symbol = user_input.upper()
 
-    # السوق السعودي (yfinance)
+    # 🏦 السوق السعودي
     if market == "🏦 السوق السعودي":
         ticker = symbol + ".SR"
         try:
             df = yf.download(ticker, period="5d", interval="15m")
             if not df.empty and "Close" in df.columns:
                 last_price = df["Close"].dropna().iloc[-1]
-                st.success(f"✅ السعر اللحظي لـ {symbol}: {last_price:.2f} ريال")
+                st.success(f"✅ السعر اللحظي لـ {symbol}: {float(last_price):.2f} ريال")
             else:
                 st.warning("⚠️ لا توجد بيانات حديثة.")
         except Exception as e:
             st.error(f"❌ خطأ أثناء تحميل البيانات: {e}")
 
-    # السوق الأمريكي (Finnhub)
+    # 🇺🇸 السوق الأمريكي
     elif market == "🇺🇸 السوق الأمريكي":
         url = f"https://finnhub.io/api/v1/quote?symbol={symbol}&token={api_key}"
         response = requests.get(url)
@@ -37,7 +37,7 @@ if st.button("📥 جلب السعر اللحظي"):
         else:
             st.warning("⚠️ لم يتم العثور على السعر.")
 
-    # العملات الرقمية (Finnhub)
+    # ₿ العملات الرقمية
     elif market == "₿ العملات الرقمية":
         url = f"https://finnhub.io/api/v1/quote?symbol=BINANCE:{symbol}USDT&token={api_key}"
         response = requests.get(url)
