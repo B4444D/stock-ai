@@ -61,7 +61,10 @@ if st.button("🚀 ابدأ التنبؤ"):
 
         df = df[['Close', 'RSI', 'MACD']].dropna()
         scaler = MinMaxScaler()
-        scaled = scaler.fit_transform(df.values)
+        close_scaler = MinMaxScaler()
+df['Close_scaled'] = close_scaler.fit_transform(df[['Close']])
+
+        scaled = scaler.fit_transform(df[['Close_scaled', 'RSI', 'MACD']].values)
         input_features = scaled.shape[1]
 
         sequence_len = 60
@@ -85,7 +88,7 @@ if st.button("🚀 ابدأ التنبؤ"):
         last_seq = scaled[-sequence_len:]
         input_features = scaled.shape[1]
         preds_scaled = model.predict(last_seq.reshape(1, sequence_len, input_features))[0]
-        forecast = scaler.inverse_transform(preds_scaled.reshape(-1, 1)).flatten()
+        forecast = close_scaler.inverse_transform(preds_scaled.reshape(-1, 1)).flatten()
 
         real_price = live_price if live_price else df['Close'].iloc[-1]
 
