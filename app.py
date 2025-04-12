@@ -12,10 +12,10 @@ from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 import os
-from datetime import date
+from datetime import date, datetime, timedelta
 import glob
 
-# تثبيت القيم العشوائية
+# ✅ تثبيت القيم العشوائية لجعل التوقعات ثابتة
 seed = 42
 np.random.seed(seed)
 random.seed(seed)
@@ -55,7 +55,9 @@ if st.button("🚀 ابدأ التنبؤ"):
         else:
             live_price = None
 
-        df = yf.download(ticker, start="2018-01-01")
+        end_date = datetime.today()
+        start_date = end_date - timedelta(days=60)
+        df = yf.download(ticker, start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
 
         if df.empty or 'Close' not in df.columns:
             st.error("❌ لم يتم العثور على بيانات سعر الإغلاق (Close) لهذا الرمز.")
@@ -102,6 +104,9 @@ if st.button("🚀 ابدأ التنبؤ"):
         scalers = {}
         scaled_data = pd.DataFrame(index=data.index)
         for col in features:
+            if col not in data.columns or data[col].isnull().any() or data[col].dropna().shape[0] == 0:
+                st.warning(f"⚠️ العمود '{col}' يحتوي على بيانات غير كافية أو غير موجود وتم تجاهله.")
+                continue
             scaler = MinMaxScaler()
             scaled_data[col] = scaler.fit_transform(data[[col]])
             scalers[col] = scaler
@@ -112,12 +117,16 @@ if st.button("🚀 ابدأ التنبؤ"):
             X.append(scaled_data.iloc[i-sequence_length:i].values)
             y.append(scaled_data.iloc[i:i+predict_days]['Close'].values)
 
+        if len(X) == 0:
+            st.error("⚠️ البيانات غير كافية لتدريب النموذج. يرجى تجربة رمز آخر أو فترة زمنية أطول.")
+            st.stop()
+
         X, y = np.array(X), np.array(y)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
-        # تحميل أو تدريب النموذج
-        if os.path.exists("trained_model.h5"):
-            model = load_model("trained_model.h5")
+        model_file = f"models/model_{ticker.replace('.', '_')}_{predict_days}.h5"
+        if os.path.exists(model_file):
+            model = load_model(model_file)
             st.info("✅ تم تحميل النموذج المدرب مسبقًا.")
         else:
             model = Sequential()
@@ -128,7 +137,8 @@ if st.button("🚀 ابدأ التنبؤ"):
             model.add(Dense(predict_days))
             model.compile(optimizer='adam', loss='mean_squared_error')
             model.fit(X_train, y_train, epochs=30, batch_size=64, verbose=0)
-            model.save("trained_model.h5")
+            os.makedirs("models", exist_ok=True)
+            model.save(model_file)
             st.success("✅ تم تدريب النموذج لأول مرة وحفظه.")
 
         last_sequence = scaled_data[-sequence_length:].values
