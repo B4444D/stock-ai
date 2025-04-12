@@ -5,21 +5,13 @@ import numpy as np
 import ta
 import matplotlib.pyplot as plt
 import requests
-import random
-import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
-from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 import os
-from datetime import date, datetime, timedelta
+from datetime import date
 import glob
-
-# ✅ تثبيت القيم العشوائية لجعل التوقعات ثابتة
-seed = 42
-np.random.seed(seed)
-random.seed(seed)
-tf.random.set_seed(seed)
 
 st.set_page_config(page_title="نموذج التنبؤ الذكي", layout="centered")
 st.title("📊 هذا تطبيق تجريبي للتنبؤ — لا يمثل نصيحة مالية")
@@ -42,7 +34,7 @@ def get_crypto_price(symbol):
     try:
         data = response.json()
         price = data[symbol]['usd']
-        change = data[symbol]['usd_24h_change']
+        change = data[symbol]['usd_24hr_change']
         return float(price), float(change)
     except:
         return None, None
@@ -55,9 +47,7 @@ if st.button("🚀 ابدأ التنبؤ"):
         else:
             live_price = None
 
-        end_date = datetime.today()
-        start_date = end_date - timedelta(days=60)
-        df = yf.download(ticker, start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
+        df = yf.download(ticker, start="2018-01-01")
 
         if df.empty or 'Close' not in df.columns:
             st.error("❌ لم يتم العثور على بيانات سعر الإغلاق (Close) لهذا الرمز.")
@@ -104,13 +94,6 @@ if st.button("🚀 ابدأ التنبؤ"):
         scalers = {}
         scaled_data = pd.DataFrame(index=data.index)
         for col in features:
-            if col not in data.columns:
-                st.warning(f"⚠️ العمود '{col}' غير موجود وتم تجاهله.")
-                continue
-            column_data = data[col].dropna()
-            if column_data.empty:
-                st.warning(f"⚠️ العمود '{col}' يحتوي على بيانات فارغة وتم تجاهله.")
-                continue
             scaler = MinMaxScaler()
             scaled_data[col] = scaler.fit_transform(data[[col]])
             scalers[col] = scaler
@@ -121,29 +104,17 @@ if st.button("🚀 ابدأ التنبؤ"):
             X.append(scaled_data.iloc[i-sequence_length:i].values)
             y.append(scaled_data.iloc[i:i+predict_days]['Close'].values)
 
-        if len(X) == 0:
-            st.error("⚠️ البيانات غير كافية لتدريب النموذج. يرجى تجربة رمز آخر أو فترة زمنية أطول.")
-            st.stop()
-
         X, y = np.array(X), np.array(y)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
-        model_file = f"models/model_{ticker.replace('.', '_')}_{predict_days}.h5"
-        if os.path.exists(model_file):
-            model = load_model(model_file)
-            st.info("✅ تم تحميل النموذج المدرب مسبقًا.")
-        else:
-            model = Sequential()
-            model.add(LSTM(100, return_sequences=True, input_shape=(X.shape[1], X.shape[2])))
-            model.add(Dropout(0.2))
-            model.add(LSTM(100))
-            model.add(Dropout(0.2))
-            model.add(Dense(predict_days))
-            model.compile(optimizer='adam', loss='mean_squared_error')
-            model.fit(X_train, y_train, epochs=30, batch_size=64, verbose=0)
-            os.makedirs("models", exist_ok=True)
-            model.save(model_file)
-            st.success("✅ تم تدريب النموذج لأول مرة وحفظه.")
+        model = Sequential()
+        model.add(LSTM(100, return_sequences=True, input_shape=(X.shape[1], X.shape[2])))
+        model.add(Dropout(0.2))
+        model.add(LSTM(100))
+        model.add(Dropout(0.2))
+        model.add(Dense(predict_days))
+        model.compile(optimizer='adam', loss='mean_squared_error')
+        model.fit(X_train, y_train, epochs=30, batch_size=64, verbose=0)
 
         last_sequence = scaled_data[-sequence_length:].values
         forecast_scaled = []
