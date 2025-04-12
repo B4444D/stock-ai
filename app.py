@@ -78,11 +78,13 @@ if st.button("🚀 ابدأ التنبؤ"):
         df['MACD'] = macd.macd().fillna(0)
 
         try:
-            stoch = ta.momentum.StochasticOscillator(
-                high=df['High'], low=df['Low'], close=df['Close']
-            )
+            stoch = ta.momentum.StochasticOscillator(high=df['High'], low=df['Low'], close=df['Close'])
             df['Stoch_K'] = stoch.stoch().fillna(0)
             df['Stoch_D'] = stoch.stoch_signal().fillna(0)
+        except Exception as e:
+            st.warning(f"⚠️ تعذر حساب مؤشر Stochastic: {e}")
+            df['Stoch_K'] = 0
+            df['Stoch_D'] = 0
         except Exception as e:
             st.warning(f"⚠️ تعذر حساب مؤشر Stochastic: {e}")
             df['Stoch_K'] = 0
