@@ -1,49 +1,85 @@
 import streamlit as st
-import requests
 import yfinance as yf
+import requests
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import train_test_split
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import LSTM, Dense, Dropout
 
-st.set_page_config(page_title="📈 السعر اللحظي", layout="centered")
-st.title("📊 جلب السعر اللحظي من الأسواق")
+st.set_page_config(page_title="تنبؤ الأسعار", layout="centered")
+st.title("🔮 نموذج تنبؤ الأسعار مع السعر اللحظي")
 
 api_key = "cvtcvi1r01qhup0vnjrgcvtcvi1r01qhup0vnjs0"
 
 market = st.selectbox("🗂️ اختر السوق:", ["🇺🇸 السوق الأمريكي", "🏦 السوق السعودي", "₿ العملات الرقمية"])
-user_input = st.text_input("🔍 أدخل رمز السهم أو العملة:", "AAPL")
+symbol = st.text_input("🔍 أدخل رمز السهم أو العملة:", "AAPL").upper()
+predict_days = st.selectbox("📅 عدد الأيام المستقبلية للتنبؤ:", [3, 5, 7])
 
-if st.button("📥 جلب السعر اللحظي"):
-    symbol = user_input.upper()
+if st.button("🚀 ابدأ التنبؤ"):
+    with st.spinner("📡 تحميل البيانات وتدريب النموذج..."):
 
-    # 🏦 السوق السعودي
-    if market == "🏦 السوق السعودي":
-        ticker = symbol + ".SR"
-        try:
-            df = yf.download(ticker, period="5d", interval="15m")
-            if not df.empty and "Close" in df.columns:
-                last_price = df["Close"].dropna().iloc[-1]
-                st.success(f"✅ السعر اللحظي لـ {symbol}: {float(last_price):.2f} ريال")
-            else:
-                st.warning("⚠️ لا توجد بيانات حديثة.")
-        except Exception as e:
-            st.error(f"❌ خطأ أثناء تحميل البيانات: {e}")
+        # الحصول على السعر اللحظي حسب السوق
+        live_price = None
+        if market == "🏦 السوق السعودي":
+            ticker = symbol + ".SR"
+            df = yf.download(ticker, period="6mo")
+            try:
+                live_price = float(df['Close'].dropna().iloc[-1])
+            except:
+                live_price = None
+        elif market == "🇺🇸 السوق الأمريكي":
+            ticker = symbol
+            df = yf.download(ticker, period="6mo")
+            url = f"https://finnhub.io/api/v1/quote?symbol={symbol}&token={api_key}"
+            r = requests.get(url).json()
+            live_price = float(r["c"]) if "c" in r and r["c"] else None
+        elif market == "₿ العملات الرقمية":
+            ticker = symbol + "-USD"
+            df = yf.download(ticker, period="6mo")
+            url = f"https://finnhub.io/api/v1/quote?symbol=BINANCE:{symbol}USDT&token={api_key}"
+            r = requests.get(url).json()
+            live_price = float(r["c"]) if "c" in r and r["c"] else None
 
-    # 🇺🇸 السوق الأمريكي
-    elif market == "🇺🇸 السوق الأمريكي":
-        url = f"https://finnhub.io/api/v1/quote?symbol={symbol}&token={api_key}"
-        response = requests.get(url)
-        data = response.json()
-        if "c" in data and data["c"]:
-            price = float(data["c"])
-            st.success(f"✅ السعر اللحظي لـ {symbol}: {price:.2f} دولار")
-        else:
-            st.warning("⚠️ لم يتم العثور على السعر.")
+        if df.empty:
+            st.error("❌ لا توجد بيانات كافية.")
+            st.stop()
 
-    # ₿ العملات الرقمية
-    elif market == "₿ العملات الرقمية":
-        url = f"https://finnhub.io/api/v1/quote?symbol=BINANCE:{symbol}USDT&token={api_key}"
-        response = requests.get(url)
-        data = response.json()
-        if "c" in data and data["c"]:
-            price = float(data["c"])
-            st.success(f"✅ السعر اللحظي لـ {symbol}: {price:.2f} دولار")
-        else:
-            st.warning("⚠️ تعذر العثور على بيانات العملة الرقمية.")
+        df = df[['Close']].dropna()
+        scaler = MinMaxScaler()
+        scaled = scaler.fit_transform(df)
+
+        sequence_len = 60
+        X, y = [], []
+        for i in range(sequence_len, len(scaled) - predict_days):
+            X.append(scaled[i-sequence_len:i])
+            y.append(scaled[i:i+predict_days, 0])
+
+        X, y = np.array(X), np.array(y)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+
+        model = Sequential()
+        model.add(LSTM(64, return_sequences=True, input_shape=(X.shape[1], X.shape[2])))
+        model.add(Dropout(0.2))
+        model.add(LSTM(64))
+        model.add(Dropout(0.2))
+        model.add(Dense(predict_days))
+        model.compile(optimizer='adam', loss='mse')
+        model.fit(X_train, y_train, epochs=10, batch_size=32, verbose=0)
+
+        last_seq = scaled[-sequence_len:]
+        preds_scaled = model.predict(last_seq.reshape(1, sequence_len, 1))[0]
+        forecast = scaler.inverse_transform(preds_scaled.reshape(-1, 1)).flatten()
+
+        real_price = live_price if live_price else df['Close'].iloc[-1]
+
+        st.subheader("🔮 التوقعات:")
+        for i, price in enumerate(forecast):
+            color = 'green' if price > real_price else 'red'
+            arrow = "📈" if price > real_price else "📉"
+            st.markdown(f"<div style='background-color:{color};padding:10px;border-radius:5px;color:white;'>اليوم {i+1}: {price:.2f} {arrow}</div>", unsafe_allow_html=True)
+
+        st.subheader("📊 السعر الحقيقي المستخدم للمقارنة:")
+        st.info(f"{real_price:.2f}")
