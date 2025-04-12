@@ -47,9 +47,15 @@ if st.button("🚀 ابدأ التنبؤ"):
             st.error("❌ لا توجد بيانات كافية.")
             st.stop()
 
-        df = df[['Close']].dropna()
+        # إضافة مؤشرات RSI و MACD
+        import ta
+        df['RSI'] = ta.momentum.RSIIndicator(close=df['Close'], window=14).rsi().fillna(0)
+        macd = ta.trend.MACD(close=df['Close'])
+        df['MACD'] = macd.macd().fillna(0)
+
+        df = df[['Close', 'RSI', 'MACD']].dropna()
         scaler = MinMaxScaler()
-        scaled = scaler.fit_transform(df)
+        scaled = scaler.fit_transform(df.values)
 
         sequence_len = 60
         X, y = [], []
@@ -61,7 +67,7 @@ if st.button("🚀 ابدأ التنبؤ"):
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
         model = Sequential()
-        model.add(LSTM(64, return_sequences=True, input_shape=(X.shape[1], X.shape[2])))
+        model.add(LSTM(64, return_sequences=True, input_shape=(sequence_len, input_features)))
         model.add(Dropout(0.2))
         model.add(LSTM(64))
         model.add(Dropout(0.2))
@@ -70,6 +76,7 @@ if st.button("🚀 ابدأ التنبؤ"):
         model.fit(X_train, y_train, epochs=10, batch_size=32, verbose=0)
 
         last_seq = scaled[-sequence_len:]
+        input_features = scaled.shape[1]
         preds_scaled = model.predict(last_seq.reshape(1, sequence_len, 1))[0]
         forecast = scaler.inverse_transform(preds_scaled.reshape(-1, 1)).flatten()
 
