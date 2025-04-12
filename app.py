@@ -34,7 +34,7 @@ def get_crypto_price(symbol):
     try:
         data = response.json()
         price = data[symbol]['usd']
-        change = data[symbol]['usd_24h_change']
+        change = data[symbol]['usd_24hr_change']
         return float(price), float(change)
     except:
         return None, None
@@ -64,13 +64,16 @@ if st.button("🚀 ابدأ التنبؤ"):
         macd = ta.trend.MACD(close=clean_close)
         df['MACD'] = macd.macd()
 
-        stoch = ta.momentum.StochasticOscillator(high=df['High'], low=df['Low'], close=clean_close)
-        stoch_k_values = np.array(stoch.stoch()).ravel()
-        stoch_d_values = np.array(stoch.stoch_signal()).ravel()
-        min_len = min(len(df), len(stoch_k_values), len(stoch_d_values))
-        df = df.iloc[-min_len:]
-        df['Stoch_K'] = stoch_k_values[-min_len:]
-        df['Stoch_D'] = stoch_d_values[-min_len:]
+        try:
+            stoch = ta.momentum.StochasticOscillator(high=df['High'], low=df['Low'], close=clean_close)
+            stoch_k = stoch.stoch().fillna(0)
+            stoch_d = stoch.stoch_signal().fillna(0)
+            df['Stoch_K'] = stoch_k.values
+            df['Stoch_D'] = stoch_d.values
+        except Exception as e:
+            st.warning(f"⚠️ تعذر حساب مؤشر Stochastic: {e}")
+            df['Stoch_K'] = 0
+            df['Stoch_D'] = 0
 
         df.dropna(inplace=True)
 
