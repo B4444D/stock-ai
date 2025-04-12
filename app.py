@@ -5,13 +5,22 @@ import numpy as np
 import ta
 import matplotlib.pyplot as plt
 import requests
+import random
+import tensorflow as tf
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.callbacks import EarlyStopping
 import os
 from datetime import date
 import glob
+
+# تثبيت العشوائية لضمان ثبات النتائج
+seed_value = 42
+np.random.seed(seed_value)
+random.seed(seed_value)
+tf.random.set_seed(seed_value)
 
 st.set_page_config(page_title="نموذج التنبؤ الذكي", layout="centered")
 st.title("📊 هذا تطبيق تجريبي للتنبؤ — لا يمثل نصيحة مالية")
@@ -57,11 +66,7 @@ if st.button("🚀 ابدأ التنبؤ"):
         df = df[df['Close'].notna()]
         df['Close'] = df['Close'].astype(float)
 
-        clean_close = df['Close'].copy()
-        if isinstance(clean_close, pd.DataFrame):
-            clean_close = clean_close.iloc[:, 0]
-        clean_close = pd.Series(clean_close.values, index=df.index).astype(float)
-
+        clean_close = df['Close']
         df['RSI'] = ta.momentum.RSIIndicator(close=clean_close).rsi()
         df['EMA20'] = ta.trend.EMAIndicator(close=clean_close, window=20).ema_indicator()
         df['EMA50'] = ta.trend.EMAIndicator(close=clean_close, window=50).ema_indicator()
@@ -69,19 +74,11 @@ if st.button("🚀 ابدأ التنبؤ"):
         df['MACD'] = macd.macd()
 
         try:
-            high = np.squeeze(df['High'].values)
-            low = np.squeeze(df['Low'].values)
-            close = np.squeeze(clean_close.values)
-
             stoch = ta.momentum.StochasticOscillator(
-                high=pd.Series(high, index=df.index),
-                low=pd.Series(low, index=df.index),
-                close=pd.Series(close, index=df.index)
+                high=df['High'], low=df['Low'], close=clean_close
             )
-            stoch_k = stoch.stoch().fillna(0)
-            stoch_d = stoch.stoch_signal().fillna(0)
-            df['Stoch_K'] = stoch_k.values
-            df['Stoch_D'] = stoch_d.values
+            df['Stoch_K'] = stoch.stoch()
+            df['Stoch_D'] = stoch.stoch_signal()
         except Exception as e:
             st.warning(f"⚠️ تعذر حساب مؤشر Stochastic: {e}")
             df['Stoch_K'] = 0
@@ -105,16 +102,18 @@ if st.button("🚀 ابدأ التنبؤ"):
             y.append(scaled_data.iloc[i:i+predict_days]['Close'].values)
 
         X, y = np.array(X), np.array(y)
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False, random_state=42)
 
         model = Sequential()
-        model.add(LSTM(100, return_sequences=True, input_shape=(X.shape[1], X.shape[2])))
-        model.add(Dropout(0.2))
-        model.add(LSTM(100))
-        model.add(Dropout(0.2))
+        model.add(LSTM(128, return_sequences=True, input_shape=(X.shape[1], X.shape[2])))
+        model.add(Dropout(0.3))
+        model.add(LSTM(128))
+        model.add(Dropout(0.3))
         model.add(Dense(predict_days))
         model.compile(optimizer='adam', loss='mean_squared_error')
-        model.fit(X_train, y_train, epochs=30, batch_size=64, verbose=0)
+
+        early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True)
+        model.fit(X_train, y_train, epochs=100, batch_size=64, validation_split=0.2, callbacks=[early_stop], verbose=0)
 
         last_sequence = scaled_data[-sequence_length:].values
         forecast_scaled = []
@@ -124,9 +123,8 @@ if st.button("🚀 ابدأ التنبؤ"):
             prediction = model.predict(current_sequence.reshape(1, sequence_length, len(features)), verbose=0)
             forecast_scaled.append(prediction[0][0])
             next_step = current_sequence[1:]
-            next_close = prediction[0][0]
             next_row = current_sequence[-1].copy()
-            next_row[features.index('Close')] = next_close
+            next_row[features.index('Close')] = prediction[0][0]
             current_sequence = np.vstack([next_step, next_row])
 
         forecast = scalers['Close'].inverse_transform(np.array(forecast_scaled).reshape(-1, 1)).flatten()
