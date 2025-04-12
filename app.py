@@ -44,8 +44,8 @@ if st.button("🚀 ابدأ التنبؤ"):
         # حساب RSI و MACD
         rsi_values = ta.momentum.RSIIndicator(close=close_clean, window=14).rsi()
 df['RSI'] = rsi_values.reindex(df.index).fillna(0)
-        macd = ta.trend.MACD(close=close_clean)
-        df['MACD'] = macd.macd().fillna(0)
+                macd_values = ta.trend.MACD(close=close_clean)
+        df['MACD'] = macd_values.macd().reindex(df.index).fillna(0)
 
         # التطبيع
         close_scaler = MinMaxScaler()
