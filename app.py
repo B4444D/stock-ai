@@ -14,7 +14,7 @@ import random
 import os
 
 st.set_page_config(page_title="نموذج تنبؤ متقدم", layout="centered")
-st.title("📊 نموذج تجريبي لتنبؤ أسعار الأسهم — لا يعتبر نصيحة مالية")
+st.title("🔮  نموذج تجريبي لتنبؤ أسعار الأسهم ولا يعتبر نصيحة مالية ")
 
 # تثبيت القيم العشوائية
 seed = 42
@@ -32,6 +32,7 @@ predict_days = st.selectbox("📅 عدد الأيام المستقبلية لل�
 if st.button("🚀 ابدأ التنبؤ"):
     with st.spinner("📡 تحميل البيانات وتدريب النموذج..."):
 
+        # تحميل البيانات حسب السوق
         if market == "🏦 السوق السعودي":
             ticker = symbol + ".SR"
             df = yf.download(ticker, period="6mo")
@@ -46,6 +47,7 @@ if st.button("🚀 ابدأ التنبؤ"):
             st.error("❌ لا توجد بيانات.")
             st.stop()
 
+        # السعر اللحظي
         live_price = None
         if market == "🇺🇸 السوق الأمريكي":
             url = f"https://finnhub.io/api/v1/quote?symbol={symbol}&token={api_key}"
@@ -64,7 +66,10 @@ if st.button("🚀 ابدأ التنبؤ"):
         if live_price:
             st.info(f"💰 السعر اللحظي لـ {symbol}: {live_price:.2f}")
 
+        # حساب المؤشرات الفنية
+        df = df.dropna()
         close_clean = pd.Series(df['Close'].values.flatten(), index=df.index).astype(float)
+
         df['RSI'] = ta.momentum.RSIIndicator(close=close_clean, window=14).rsi().reindex(df.index).fillna(0)
         macd = ta.trend.MACD(close=close_clean)
         df['MACD'] = macd.macd().reindex(df.index).fillna(0)
@@ -74,18 +79,21 @@ if st.button("🚀 ابدأ التنبؤ"):
         features = ['Open', 'High', 'Low', 'Close', 'Volume', 'RSI', 'MACD', 'EMA20', 'EMA50']
         df = df[features].dropna()
 
+        # التطبيع
         scaler = MinMaxScaler()
         scaled = scaler.fit_transform(df)
 
+        # إعداد البيانات
         seq_len = 60
         X, y = [], []
         for i in range(seq_len, len(scaled) - predict_days):
             X.append(scaled[i-seq_len:i])
-            y.append(scaled[i:i+predict_days, 3])
+            y.append(scaled[i:i+predict_days, 3])  # التوقع على عمود Close فقط
 
         X, y = np.array(X), np.array(y)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
 
+        # بناء النموذج
         input_features = X.shape[2]
         model = Sequential()
         model.add(LSTM(128, return_sequences=True, input_shape=(seq_len, input_features)))
@@ -94,23 +102,26 @@ if st.button("🚀 ابدأ التنبؤ"):
         model.add(Dropout(0.3))
         model.add(Dense(predict_days))
         model.compile(optimizer='adam', loss='mse')
-        model.fit(X_train, y_train, epochs=50, batch_size=32, shuffle=False, verbose=0)
+        model.fit(X_train, y_train, epochs=30, batch_size=32, shuffle=False, verbose=0)
 
+        # التنبؤ
         last_seq = scaled[-seq_len:]
         preds_scaled = model.predict(last_seq.reshape(1, seq_len, input_features))[0]
         forecast = scaler.inverse_transform(
             np.hstack([
-                np.zeros((predict_days, scaled.shape[1]))[:, :3],
+                np.zeros((predict_days, scaled.shape[1]))[:, :3],  # صفر للأعمدة غير Close
                 preds_scaled.reshape(-1, 1),
                 np.zeros((predict_days, scaled.shape[1]))[:, 4:]
             ])
-        )[:, 3]
+        )[:, 3]  # استخراج التوقع الحقيقي لـ Close
 
+        # عرض التوقعات
         st.subheader("🔮 التوقعات:")
         for i, price in enumerate(forecast):
             direction = "⬆️" if live_price and price > live_price else "⬇️"
             st.markdown(f"اليوم {i+1}: {price:.2f} {direction}")
 
+        # رسم بياني للسعر
         st.subheader("📊 السعر الفعلي")
         fig, ax = plt.subplots(figsize=(10, 4))
         ax.plot(df['Close'][-100:], label='Close')
