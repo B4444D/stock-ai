@@ -87,6 +87,10 @@ if st.button("🚀 ابدأ التنبؤ"):
             st.warning(f"⚠️ تعذر حساب مؤشر Stochastic: {e}")
             df['Stoch_K'] = 0
             df['Stoch_D'] = 0
+        except Exception as e:
+            st.warning(f"⚠️ تعذر حساب مؤشر Stochastic: {e}")
+            df['Stoch_K'] = 0
+            df['Stoch_D'] = 0
 
 # المؤشرات الفنية (خارج أي تداخل)
 clean_close_for_rsi = df['Close'].reset_index(drop=True).astype(float).fillna(method='ffill')
