@@ -12,7 +12,7 @@ from sklearn.model_selection import train_test_split
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Dropout
 import os
-from datetime import date
+from datetime import date, datetime, timedelta
 import glob
 
 # تثبيت القيم العشوائية
@@ -55,7 +55,10 @@ if st.button("🚀 ابدأ التنبؤ"):
         else:
             live_price = None
 
-        df = yf.download(ticker, start="2018-01-01")
+        # تحميل بيانات آخر شهر فقط
+        end_date = datetime.today()
+        start_date = end_date - timedelta(days=30)
+        df = yf.download(ticker, start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
 
         if df.empty or 'Close' not in df.columns:
             st.error("❌ لم يتم العثور على بيانات سعر الإغلاق (Close) لهذا الرمز.")
@@ -111,6 +114,10 @@ if st.button("🚀 ابدأ التنبؤ"):
         for i in range(sequence_length, len(scaled_data)-predict_days):
             X.append(scaled_data.iloc[i-sequence_length:i].values)
             y.append(scaled_data.iloc[i:i+predict_days]['Close'].values)
+
+        if len(X) == 0:
+            st.error("⚠️ البيانات غير كافية لتدريب النموذج. يرجى تجربة رمز آخر أو فترة زمنية أطول.")
+            st.stop()
 
         X, y = np.array(X), np.array(y)
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
