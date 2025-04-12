@@ -50,7 +50,7 @@ if st.button("🚀 ابدأ التنبؤ"):
         # إضافة مؤشرات RSI و MACD
         import ta
                 # تنظيف الإغلاق
-        close_clean = pd.Series(df['Close'].values, index=df.index).astype(float)
+        close_clean = df['Close'].squeeze().astype(float)
 
         # RSI
         df['RSI'] = ta.momentum.RSIIndicator(close=close_clean, window=14).rsi().fillna(0)
