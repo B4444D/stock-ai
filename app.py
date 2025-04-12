@@ -84,7 +84,7 @@ if st.button("🚀 ابدأ التنبؤ"):
 
         last_seq = scaled[-sequence_len:]
         input_features = scaled.shape[1]
-        preds_scaled = model.predict(last_seq.reshape(1, sequence_len, 1))[0]
+        preds_scaled = model.predict(last_seq.reshape(1, sequence_len, input_features))[0]
         forecast = scaler.inverse_transform(preds_scaled.reshape(-1, 1)).flatten()
 
         real_price = live_price if live_price else df['Close'].iloc[-1]
