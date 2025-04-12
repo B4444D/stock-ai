@@ -55,7 +55,6 @@ if st.button("🚀 ابدأ التنبؤ"):
         else:
             live_price = None
 
-        # تحميل بيانات آخر شهرين فقط
         end_date = datetime.today()
         start_date = end_date - timedelta(days=60)
         df = yf.download(ticker, start=start_date.strftime('%Y-%m-%d'), end=end_date.strftime('%Y-%m-%d'))
@@ -105,8 +104,8 @@ if st.button("🚀 ابدأ التنبؤ"):
         scalers = {}
         scaled_data = pd.DataFrame(index=data.index)
         for col in features:
-            if data[col].isnull().any() or data[col].dropna().shape[0] == 0:
-                st.warning(f"⚠️ العمود '{col}' يحتوي على بيانات غير كافية أو قيم مفقودة وتم تجاهله.")
+            if col not in data.columns or data[col].isnull().any() or data[col].dropna().shape[0] == 0:
+                st.warning(f"⚠️ العمود '{col}' يحتوي على بيانات غير كافية أو غير موجود وتم تجاهله.")
                 continue
             scaler = MinMaxScaler()
             scaled_data[col] = scaler.fit_transform(data[[col]])
