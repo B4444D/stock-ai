@@ -39,7 +39,7 @@ if st.button("🚀 ابدأ التنبؤ"):
 
         # تنظيف البيانات
         df = df[['Close']].dropna()
-        close_clean = df['Close'].astype(float)
+        close_clean = pd.Series(df['Close'].values.flatten(), index=df.index).astype(float)
 
         # حساب RSI و MACD
         rsi_values = ta.momentum.RSIIndicator(close=close_clean, window=14).rsi()
